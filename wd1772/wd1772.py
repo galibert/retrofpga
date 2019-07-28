@@ -44,9 +44,9 @@ class firmware(Elaboratable):
     def elaborate(self, platform):
         m = Module()
         m.submodules.rdport = rdport = self.mem.read_port()
-        m.d.cl0n += [ self.l_adr.eq(self.i_adr) ]
-        m.d.cl0p += [ rdport.addr.eq(self.l_adr), self.l_rom.eq(rdport.data) ]
-        m.d.cl0n += [ self.o_rom.eq(self.l_rom) ]
+        m.d.ck0n += [ self.l_adr.eq(self.i_adr) ]
+        m.d.ck0p += [ rdport.addr.eq(self.l_adr), self.l_rom.eq(rdport.data) ]
+        m.d.ck0n += [ self.o_rom.eq(self.l_rom) ]
         return m
 
 class wd1772(Elaboratable):
