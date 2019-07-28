@@ -4,8 +4,6 @@ class firmware(Elaboratable):
     def __init__(self):
         self.i_adr = Signal(8)
         self.o_rom = Signal(19)
-        self.l_adr = Signal(8)
-        self.l_rom = Signal(19)
         self.mem = Memory(width=19, depth=256, init=[
             0x54800, 0x24290, 0x28fe0, 0x00058, 0x00098, 0x04198, 0x0c9d0, 0x4c9d0,
             0x3c200, 0x24202, 0x30e58, 0x58270, 0x3c200, 0x18400, 0x10232, 0x24204,
@@ -43,10 +41,8 @@ class firmware(Elaboratable):
 
     def elaborate(self, platform):
         m = Module()
-        m.submodules.rdport = rdport = self.mem.read_port()
-        m.d.ck0n += [ self.l_adr.eq(self.i_adr) ]
-        m.d.ck0p += [ rdport.addr.eq(self.l_adr), self.l_rom.eq(rdport.data) ]
-        m.d.ck0n += [ self.o_rom.eq(self.l_rom) ]
+        m.submodules.rdport = rdport = self.mem.read_port(domain="ck0n")
+        m.d.ck0n += [ rdport.addr.eq(self.i_adr), self.o_rom.eq(rdport.data) ]
         return m
 
 class wd1772(Elaboratable):
