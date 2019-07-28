@@ -56,5 +56,6 @@ class wd1772(Elaboratable):
     def elaborate(self, platform):
         m = Module()
         m.domains += self.ck0p, self.ck0n
+        m.submodules += self.m_firmware
         m.d.comb += [ self.m_firmware.i_adr.eq(self.i_adr), self.o_rom.eq(self.m_firmware.o_rom) ]
         return m
