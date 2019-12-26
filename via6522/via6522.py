@@ -28,32 +28,39 @@ class pa(Elaboratable):
 
 class ora(Elaboratable):
     def __init__(self):
-        self.o_d = Signal(8)
+        self.i_p = Signal(8)
         self.i_d = Signal(8)
         self.i_or_r = Signal()
         self.i_or_w = Signal()
         self.i_ddr_r = Signal()
         self.i_ddr_w = Signal()
+        self.i_res = Signal()
+
         self.o_p = Signal(8)
-        self.i_p = Signal(8)
+        self.o_d = Signal(8)
+
         self.c_or = Signal(8)
         self.c_ddr = Signal(8)
-        self.i_res = Signal()
 
     def elaborate(self, platform):
         m = Module()
-        m.d.ck0n += self.o_d.eq(0xff)
-        with m.If(self.i_or_r):
-            m.d.ck0n += self.o_d.eq(self.i_p)
-        with m.If(self.i_ddr_r):
-            m.d.ck0n += self.o_d.eq(self.c_ddr)
-        with m.If(self.i_or_w):
-            m.d.ck0p += self.c_or.eq(self.i_d)
-        with m.If(self.i_ddr_w):
-            m.d.ck0p += self.c_ddr.eq(self.i_d)
         with m.If(~self.i_res):
-            m.d.ck0p += self.c_or.eq(0x00)
-            m.d.ck0p += self.c_ddr.eq(0x00)
+            m.d.ck0n += self.c_or.eq(0x00)
+        with m.Elif(self.i_or_w):
+            m.d.ck0n += self.c_or.eq(self.i_d)
+
+        with m.If(~self.i_res):
+            m.d.ck0n += self.c_ddr.eq(0x00)
+        with m.Elif(self.i_ddr_w):
+            m.d.ck0n += self.c_ddr.eq(self.i_d)
+
+        with m.If(self.i_or_r):
+            m.d.ck0p += self.o_d.eq(self.i_p)
+        with m.Elif(self.i_ddr_r):
+            m.d.ck0p += self.o_d.eq(self.c_ddr)
+        with m.Else():
+            m.d.ck0p += self.o_d.eq(0xff)
+
         m.d.comb += self.o_p.eq(self.c_or | ~self.c_ddr)
         return m
 
@@ -93,9 +100,7 @@ class via6522(Elaboratable):
         self.c_rw = Signal()
         self.c_r = Signal()
         self.c_w = Signal()
-        self.c_rs_latch_1 = Signal(4)
-        self.c_rs_latch_2 = Signal(4)
-        self.c_d = Signal(8)
+        self.c_rs = Signal(4)
 
         self.m_ora = ora()
         self.m_pa = pa()
@@ -107,7 +112,7 @@ class via6522(Elaboratable):
         m.submodules += self.m_pa
 
         # connect the buses
-        m.d.comb += self.m_ora.i_d.eq(self.c_d)
+        m.d.comb += self.m_ora.i_d.eq(self.i_d)
         m.d.comb += self.o_d.eq(self.m_ora.o_d & 0xff)
         m.d.comb += self.m_ora.i_p.eq(self.m_pa.o_rp)
         m.d.comb += self.m_pa.i_rp.eq(self.m_ora.o_p)
@@ -116,23 +121,21 @@ class via6522(Elaboratable):
         m.d.comb += self.m_ora.i_res.eq(self.i_res)
 
         # chip select and r/w handling
-        m.d.ck0n += self.c_cs.eq(self.i_cs1 & ~self.i_cs2)
-        m.d.ck0n += self.c_rw.eq(self.i_rw)
+        m.d.comb += self.c_cs.eq(self.i_cs1 & ~self.i_cs2)
+        m.d.comb += self.c_rw.eq(self.i_rw)
         m.d.comb += self.c_r.eq(self.c_cs & self.c_rw)
-        m.d.comb += self.c_r.eq(self.c_cs & ~self.c_rw)
+        m.d.comb += self.c_w.eq(self.c_cs & ~self.c_rw)
         
         # data i/o
-        m.d.ck0p += self.c_d.eq(self.i_d)
         m.d.ck0p += self.o_d_drive.eq(self.c_cs & self.c_rw & ~self.i_res)
 
         # rs latching and address decode
-        m.d.ck0n += self.c_rs_latch_1.eq(self.i_rs)
-        m.d.ck0p += self.c_rs_latch_2.eq(self.c_rs_latch_1)
+        m.d.ck0p += self.c_rs.eq(self.i_rs)
         
-        m.d.comb += self.m_ora.i_or_r.eq(self.c_r & ((self.c_rs_latch_1 == 0xf) | (self.c_rs_latch_1 == 0x1)))
-        m.d.comb += self.m_ora.i_or_w.eq(self.c_w & ((self.c_rs_latch_2 == 0xf) | (self.c_rs_latch_2 == 0x1)))
-        m.d.comb += self.m_ora.i_ddr_r.eq(self.c_r & self.c_rs_latch_1 == 0x3)
-        m.d.comb += self.m_ora.i_ddr_w.eq(self.c_w & self.c_rs_latch_2 == 0x3)
+        m.d.comb += self.m_ora.i_or_r.eq(self.c_r & ((self.i_rs == 0xf) | (self.i_rs == 0x1)))
+        m.d.comb += self.m_ora.i_or_w.eq(self.c_w & ((self.c_rs == 0xf) | (self.c_rs == 0x1)))
+        m.d.comb += self.m_ora.i_ddr_r.eq(self.c_r & (self.i_rs == 0x3))
+        m.d.comb += self.m_ora.i_ddr_w.eq(self.c_w & (self.c_rs == 0x3))
 
         m.d.comb += self.m_pa.i_p_input_latch.eq(1)
         return m
