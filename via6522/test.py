@@ -2,7 +2,7 @@ from via6522 import via6522
 from nmigen import *
 from nmigen.back.pysim import *
 
-base_clock = 10e-9 # To make things easier under gtkwave
+base_clock = 1e-6 # To make things easier under gtkwave
 via = via6522()
 ports = [ via.i_d, via.i_pa, via.i_rs, via.i_cs1, via.i_cs2, via.i_rw, via.i_res, via.o_d, via.o_pa ]
 
@@ -24,9 +24,9 @@ def wr(reg, value):
     yield via.i_cs2.eq(0)
     yield via.i_rw.eq(0)
     yield via.i_rs.eq(reg)
-    yield Tick("ck1p")
-    yield via.i_d.eq(value)
     yield Tick("ck0p")
+    yield via.i_d.eq(value)
+    yield Tick("ck0n")
     yield via.i_cs1.eq(0)
     yield via.i_cs2.eq(1)
 
@@ -35,8 +35,8 @@ def rr(reg, value):
     yield via.i_cs2.eq(0)
     yield via.i_rw.eq(1)
     yield via.i_rs.eq(reg)
-    yield Tick("ck1p")
     yield Tick("ck0p")
+    yield Tick("ck0n")
     yield via.i_cs1.eq(0)
     yield via.i_cs2.eq(1)
         
@@ -51,6 +51,8 @@ def stimulus_proc():
     for i in range(0, 2):
         yield Tick("ck0p")
     yield via.i_res.eq(1)
+    for i in range(0, 2):
+        yield Tick("ck0p")
 
     # Write ddra to all output
     wr(0x3, 0xff)

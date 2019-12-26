@@ -38,7 +38,7 @@ class ora(Elaboratable):
         self.i_p = Signal(8)
         self.c_or = Signal(8)
         self.c_ddr = Signal(8)
-        self.i_reset = Signal()
+        self.i_res = Signal()
 
     def elaborate(self, platform):
         m = Module()
@@ -51,7 +51,7 @@ class ora(Elaboratable):
             m.d.ck0p += self.c_or.eq(self.i_d)
         with m.If(self.i_ddr_w):
             m.d.ck0p += self.c_ddr.eq(self.i_d)
-        with m.If(~self.i_reset):
+        with m.If(~self.i_res):
             m.d.ck0p += self.c_or.eq(0x00)
             m.d.ck0p += self.c_ddr.eq(0x00)
         m.d.comb += self.o_p.eq(self.c_or | ~self.c_ddr)
@@ -113,6 +113,7 @@ class via6522(Elaboratable):
         m.d.comb += self.m_pa.i_rp.eq(self.m_ora.o_p)
         m.d.comb += self.o_pa.eq(self.m_pa.o_p)
         m.d.comb += self.m_pa.i_p.eq(self.i_pa)
+        m.d.comb += self.m_ora.i_res.eq(self.i_res)
 
         # chip select and r/w handling
         m.d.ck0n += self.c_cs.eq(self.i_cs1 & ~self.i_cs2)
