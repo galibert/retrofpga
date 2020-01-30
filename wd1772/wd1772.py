@@ -45,6 +45,21 @@ class firmware(Elaboratable):
         m.d.ck0n += [ rdport.addr.eq(self.i_adr), self.o_rom.eq(rdport.data) ]
         return m
 
+class pc(Elaboratable):
+    def __init__(self):
+        self.o_pc = Signal(8)
+        self.i_rom = Signal(19)
+        self.i_pch_set_rom = Signal()
+        self.i_pch_set_next = Signal()
+        self.i_pcl_set_rom = Signal()
+        self.i_pcl_set_next = Signal()
+
+    def elaborate(self, platform):
+        m = Module()
+        m.d.comb += self.n2183.eq(self.i_rom[3:9] == 0b010101)
+
+#   m.d.comb += n2183.eq(~(rom[8]|rom[6]|rom[4]|~(rom[5]&rom[7]&rom[3])))
+
 class wd1772(Elaboratable):
     def __init__(self):
         self.ck0p = ClockDomain()
