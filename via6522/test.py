@@ -10,7 +10,7 @@ sim = Simulator(via)
 sim.add_clock(base_clock, phase=0, domain="ck0p")
 sim.add_clock(base_clock, phase=base_clock/2, domain="ck0n")
 
-sim.add_inputs([via.i_cs1, via.i_cs2, via.i_rw, via.i_rs, via.i_d, via.m_ora.c_ddr])
+#sim.add_inputs([via.i_cs1, via.i_cs2, via.i_rw, via.i_rs, via.i_d, via.m_ora.c_ddr])
 
 def stimulus_proc():
     # Start by resetting
