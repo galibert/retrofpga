@@ -13,7 +13,7 @@ sim.add_clock(base_clock, phase=0, domain="sync")
 def stimulus_proc():
     yield ccu.i_ccs.eq(1)
     while True:
-        yield Tick(ccu.sync)
+        yield Tick()
 
 
 sim.add_process(stimulus_proc)

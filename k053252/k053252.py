@@ -9,8 +9,6 @@ class smode(IntEnum):
 
 class k053252(Elaboratable):
     def __init__(self):
-        self.sync   = ClockDomain()
-
         self.i_ab   = Signal(4)
         self.i_db   = Signal(8)
         self.i_ccs  = Signal()
@@ -46,7 +44,6 @@ class k053252(Elaboratable):
 
     def elaborate(self, platform):
         m = Module()
-        m.domains += self.sync
 
         m.d.comb += self.o_ncsy.eq(self.o_nhsy & self.o_nvsy)
         m.d.comb += self.o_ncbk.eq(self.o_nhbk & self.o_nvbk)
