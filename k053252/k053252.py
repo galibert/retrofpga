@@ -47,10 +47,10 @@ class k053252(Elaboratable):
 
         m.d.comb += self.o_ncsy.eq(self.o_nhsy & self.o_nvsy)
         m.d.comb += self.o_ncbk.eq(self.o_nhbk & self.o_nvbk)
-        m.d.comb += self.o_nhsy.eq(self.hm != 1)
-        m.d.comb += self.o_nvsy.eq(self.vm != 1)
-        m.d.comb += self.o_nhbk.eq(self.hm == 3)
-        m.d.comb += self.o_nvbk.eq(self.vm == 3)
+        m.d.comb += self.o_nhsy.eq(self.hm != smode.sync)
+        m.d.comb += self.o_nvsy.eq(self.vm != smode.sync)
+        m.d.comb += self.o_nhbk.eq(self.hm == smode.vis)
+        m.d.comb += self.o_nvbk.eq(self.vm == smode.vis)
         m.d.comb += self.o_fcnt.eq(self.fc[1])
 
         hend  = Signal()

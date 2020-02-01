@@ -2,3 +2,6 @@ __pycache__
 *.gtkw
 *.vcd
 *~
+yosys.cmd
+overdrive/overdrive.cc
+overdrive/overdrive
