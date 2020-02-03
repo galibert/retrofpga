@@ -8,9 +8,9 @@ int main()
   overdrive.p_i__ccs.next = value<1>{1u};
   overdrive.step();
 
-  int prev = 0xffff;
+  int prev = 0x1010;
 
-  for (unsigned i = 0; i < 2*384*264; i++) {
+  for (unsigned i = 0; i < 100*384*264; i++) {
     int next =
       (overdrive.p_o__nvsy.curr.data[0] << 12) |
       (overdrive.p_o__nvbk.curr.data[0] << 8) |
@@ -18,7 +18,9 @@ int main()
       overdrive.p_o__nhbk.curr.data[0];
 
     if(next != prev) {
-      fprintf(stdout, "%6d: %04x\n", i, next);
+      if((prev & 0x100) && !(next & 0x100))
+	fprintf(stderr, "%6d: vblank start\n", i);
+      fprintf(stderr, "%04x\n", next);
       prev = next;
     }
 
