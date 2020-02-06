@@ -2,8 +2,8 @@ from k053252 import k053252
 from nmigen import *
 from nmigen.back.pysim import *
 
-# Base clock is 6, 8 or 12MHz
-base_clock = 1/(6e6)
+# Base clock is 12MHz or 16MHz
+base_clock = 1/(12e6)
 
 ccu = k053252()
 sim = Simulator(ccu)
