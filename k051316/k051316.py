@@ -18,6 +18,9 @@ class k051316(Elaboratable):
 
         self.o_vramadr = Signal(10)
 
+        self.o_xcp = Signal(24)
+        self.o_ycp = Signal(24)
+
         self.start_x = Signal(signed(16), reset = r[0])
         self.incxx   = Signal(signed(16), reset = r[1])
         self.incyx   = Signal(signed(16), reset = r[2])
@@ -77,6 +80,9 @@ class k051316(Elaboratable):
                 m.d.comb += cx.eq(self.xcp + self.incxx)
                 m.d.comb += cy.eq(self.ycp + self.incxy)
 
+            m.d.comb += self.o_xcp.eq(cx)
+            m.d.comb += self.o_ycp.eq(cy)
+
             m.d.sync += self.xcp.eq(cx)
             m.d.sync += self.ycp.eq(cy)
 
@@ -124,7 +130,7 @@ class k051316(Elaboratable):
             m.d.comb += vramadr[5:].eq(self.ycp[15:20])
             m.d.sync += rdportl.addr.eq(vramadr)
             m.d.sync += rdporth.addr.eq(vramadr)
-            m.d.sync += self.o_vramadr.eq(vramadr)
+            m.d.comb += self.o_vramadr.eq(vramadr)
 
         return m
 

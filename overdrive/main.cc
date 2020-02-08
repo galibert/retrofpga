@@ -173,23 +173,25 @@ void run_design()
     }
 
     // more compatible but slightly slower code: explicitly drive a clock signal
-    overdrive.p_clk.next = value<1>{1u};
-    overdrive.step();
-    overdrive.p_clk.next = value<1>{0u};
-    overdrive.step();
+    //    overdrive.p_clk.next = value<1>{1u};
+    //    overdrive.step();
+    //    overdrive.p_clk.next = value<1>{0u};
+    //    overdrive.step();
     // less compatible but slightly faster code: trigger events directly
     // overdrive.posedge_p_clk = true;
     // overdrive.step();
     // even less compatible but even faster code: omit delta cycles
-    //    overdrive.posedge_p_clk = true;
-    //    overdrive.eval();
-    //    overdrive.commit();
+
+    overdrive.posedge_p_clk = true;
+    overdrive.eval();
+    overdrive.commit();
   }
 
   for(int x = 263; x >= 0; x--) {
     for(int y = 0; y != 384; y++) {
       u32 v = overdrive.p_o__ci4.curr.data[0];
       u16 c = palette[v | 0x600];
+      printf("%03d.%03d.a: ca=%06x xcp=%06x ycp=%06x vramadr=%03x\n", x, y, overdrive.p_o__ca.curr.data[0], overdrive.p_o__xcp.curr.data[0], overdrive.p_o__ycp.curr.data[0], overdrive.p_o__vramadr.curr.data[0]);
       //      c = overdrive.p_o__vramadr.curr.data[0];
 
       u8 r = c & 31;
@@ -248,15 +250,16 @@ void run_design()
       p[0] = bcol >> 16; p[1] = bcol >> 8; p[2] = bcol;
       p[3] = bcol >> 16; p[4] = bcol >> 8; p[5] = bcol;
       p[6] = bcol >> 16; p[7] = bcol >> 8; p[8] = bcol;
+      
+      overdrive.posedge_p_clk = true;
+      overdrive.eval();
+      overdrive.commit();
 
-      overdrive.p_clk.next = value<1>{1u};
-      overdrive.step();
-      overdrive.p_clk.next = value<1>{0u};
-      overdrive.step();
-      overdrive.p_clk.next = value<1>{1u};
-      overdrive.step();
-      overdrive.p_clk.next = value<1>{0u};
-      overdrive.step();
+      printf("%03d.%03d.b: ca=%06x xcp=%06x ycp=%06x vramadr=%03x\n", x, y, overdrive.p_o__ca.curr.data[0], overdrive.p_o__xcp.curr.data[0], overdrive.p_o__ycp.curr.data[0], overdrive.p_o__vramadr.curr.data[0]);
+
+      overdrive.posedge_p_clk = true;
+      overdrive.eval();
+      overdrive.commit();
     }
   }
 }

@@ -24,7 +24,9 @@ class overdrive(Elaboratable):
         self.o_ci3 = Signal(8)
         self.o_ci4 = Signal(8)
 
-        self.o_roz_1 = Signal(24)
+        self.o_ca  = Signal(24)
+        self.o_xcp = Signal(24)
+        self.o_ycp = Signal(24)
         self.o_vramadr = Signal(10)
 
         self.m_timings = k053252.k053252()
@@ -44,8 +46,9 @@ class overdrive(Elaboratable):
         m.submodules += self.m_timings
         m.submodules += self.m_roz_1
         m.submodules += self.m_roz_2
-        m.submodules.roz1rd = roz1rd = self.roz1_rom.read_port(domain="sync")
-        m.submodules.roz2rd = roz2rd = self.roz2_rom.read_port(domain="sync")
+        roz1rd = self.roz1_rom.read_port()
+        roz2rd = self.roz2_rom.read_port()
+        m.submodules += [roz1rd, roz2rd]
 
         m.d.comb += self.o_nhsy.eq(self.m_timings.o_nhsy)
         m.d.comb += self.o_nvsy.eq(self.m_timings.o_nvsy)
@@ -64,7 +67,9 @@ class overdrive(Elaboratable):
             m.d.comb += self.o_ci4[:4].eq(roz1rd.data[:4])
         m.d.comb += self.o_ci4[4:].eq(self.m_roz_1.o_ca[18:22])
 
-        m.d.comb += self.o_roz_1.eq(self.m_roz_1.o_ca)
+        m.d.comb += self.o_ca.eq(self.m_roz_1.o_ca)
+        m.d.comb += self.o_xcp.eq(self.m_roz_1.o_xcp)
+        m.d.comb += self.o_ycp.eq(self.m_roz_1.o_ycp)
         m.d.comb += self.o_vramadr.eq(self.m_roz_1.o_vramadr)
 
         m.d.comb += self.m_roz_2.i_clk2.eq(self.m_timings.o_clk2)
@@ -98,7 +103,7 @@ class overdrive(Elaboratable):
         return m
 
 
-if False:
+if True:
     rtlil_text = rtlil.convert(overdrive(), platform=None, name="overdrive")
     print("""
     read_ilang <<rtlil
