@@ -31,8 +31,8 @@ typedef unsigned long  u64;
 //    l0 = obj  (9)
 //    l1 = lvc1 (9)
 //    l2 = lvc2 (9)
-//    l3 = roz1 (8)
-//    l4 = roz2 (8)
+//    l3 = roz2 (8)
+//    l4 = roz1 (8)
 
 //   first 1:
 // roz 1: 0 8 0 0 0 8 0 7
@@ -45,11 +45,22 @@ typedef unsigned long  u64;
 
 u16 *palette;
 
+u16 vram[0x20*0x20];
+
 constexpr int SX = 3*3;
 constexpr int SY = (264*2+1)*9*3;
 constexpr int SY1 = (264*2+1)*3*3;
 
 unsigned char image[384*SY];
+
+template<u32 nb> u32 inv(u32 v)
+{
+  u32 r = 0;
+  for(u32 i=0; i != nb; i++)
+    if(v & (1 << i))
+      v |= 1 << (nb-1-i);
+  return v;
+}
 
 static void w32(unsigned char *p, int l)
 {
@@ -143,8 +154,8 @@ void run_design()
 {
   cxxrtl_design::p_overdrive overdrive;
 
-  overdrive.p_i__ccs.next = value<1>{1u};
-  overdrive.step();
+  //  overdrive.p_i__ccs.next = value<1>{1u};
+  //  overdrive.step();
 
   int prev = 0x1010;
 
@@ -162,26 +173,62 @@ void run_design()
     }
 
     // more compatible but slightly slower code: explicitly drive a clock signal
-    // overdrive.p_clk.next = value<1>{1u};
-    // overdrive.step();
-    // overdrive.p_clk.next = value<1>{0u};
-    // overdrive.step();
+    overdrive.p_clk.next = value<1>{1u};
+    overdrive.step();
+    overdrive.p_clk.next = value<1>{0u};
+    overdrive.step();
     // less compatible but slightly faster code: trigger events directly
     // overdrive.posedge_p_clk = true;
     // overdrive.step();
     // even less compatible but even faster code: omit delta cycles
-    overdrive.posedge_p_clk = true;
-    overdrive.eval();
-    overdrive.commit();
+    //    overdrive.posedge_p_clk = true;
+    //    overdrive.eval();
+    //    overdrive.commit();
   }
 
   for(int x = 263; x >= 0; x--) {
     for(int y = 0; y != 384; y++) {
+      u32 v = overdrive.p_o__ci4.curr.data[0];
+      u16 c = palette[v | 0x600];
+      //      c = overdrive.p_o__vramadr.curr.data[0];
+
+      u8 r = c & 31;
+      u8 g = (c >> 5) & 31;
+      u8 b = (c >> 10) & 31;
+
+      //      r = inv<5>(r);
+      //      g = inv<5>(g);
+
       unsigned int bcol = 0;
-      if(!overdrive.p_o__nvbk.curr.data[0])
-	bcol |= 0x00ffff;
-      if(!overdrive.p_o__nhbk.curr.data[0])
-	bcol |= 0xff0000;
+      bcol |= (r << 19) | ((r & 0x1c) << 14);
+      bcol |= (g << 11) | ((g & 0x1c) <<  6);
+      bcol |= (b <<  3) | ((b & 0x1c) >>  2);
+
+      //      bcol = 0;
+      //      u16 vr = vram[c];
+      //      printf("%03x\n", c);
+      //      bcol = (inv<8>(vr >> 8) << 16) | (inv<8>(vr) << 8);
+
+
+      if(0) {
+	if(v == 0x12)
+	  bcol = 0xff0000;
+	else if(v == 0x42)
+	  bcol = 0x00ff00;
+	else if(v == 0x40)
+	  bcol = 0x0000ff;
+	else if(v == 0x10)
+	  bcol = 0x00ffff;
+	else
+	  bcol = 0xffffff;
+      }
+
+      if(0) {
+	if(!overdrive.p_o__nvbk.curr.data[0])
+	  bcol |= 0x00ffff;
+	if(!overdrive.p_o__nhbk.curr.data[0])
+	  bcol |= 0xff0000;
+      }
 
       unsigned int ccol = 0;
       if(!overdrive.p_o__nvsy.curr.data[0])
@@ -202,12 +249,14 @@ void run_design()
       p[3] = bcol >> 16; p[4] = bcol >> 8; p[5] = bcol;
       p[6] = bcol >> 16; p[7] = bcol >> 8; p[8] = bcol;
 
-      overdrive.posedge_p_clk = true;
-      overdrive.eval();
-      overdrive.commit();
-      overdrive.posedge_p_clk = true;
-      overdrive.eval();
-      overdrive.commit();
+      overdrive.p_clk.next = value<1>{1u};
+      overdrive.step();
+      overdrive.p_clk.next = value<1>{0u};
+      overdrive.step();
+      overdrive.p_clk.next = value<1>{1u};
+      overdrive.step();
+      overdrive.p_clk.next = value<1>{0u};
+      overdrive.step();
     }
   }
 }
@@ -255,8 +304,8 @@ void run_trace()
       case 0: case 1: bcol = 0x0000ff; break; // obj
       case 2: case 3: bcol = 0x00ff00; break; // lvc1
       case 4: case 5: bcol = 0xff0000; break; // lvc2
-      case 7:         bcol = 0xffff00; break; // roz1
-      case 6:         bcol = 0xff00ff; break; // roz2
+      case 6:         bcol = 0xffff00; break; // roz1
+      case 7:         bcol = 0xff00ff; break; // roz2
       }
 
       auto p = image + y*SY + x*SX + (264 + 1)*SX;
@@ -301,6 +350,10 @@ int main(int argc, char **argv)
   palette = static_cast<u16 *>(file_load(path));
   for(int i=0; i != 2048; i++)
     palette[i] = (palette[i] << 8) | (palette[i] >> 8);
+
+  u8 *vr = static_cast<u8 *>(file_load("captures/first_1_roz_1.bin"));
+  for(int i=0; i<0x20*0x20; i++)
+    vram[i] = vr[2*i] | (vr[2*i+0x800] << 8);
 
   run_design();
   run_trace();
