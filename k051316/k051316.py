@@ -17,7 +17,7 @@ class k051316(Elaboratable):
         self.o_oblk = Signal()
 
         self.o_vramadr = Signal(10)
-
+        self.o_rdata = Signal(16)
         self.o_xcp = Signal(24)
         self.o_ycp = Signal(24)
 
@@ -54,6 +54,12 @@ class k051316(Elaboratable):
         m.submodules.rdportl = rdportl = self.vraml.read_port(domain = 'sync')
         m.submodules.rdporth = rdporth = self.vramh.read_port(domain = 'sync')
 
+        m.d.comb += self.o_xcp.eq(self.xcp)
+        m.d.comb += self.o_ycp.eq(self.ycp)
+        m.d.comb += self.o_vramadr.eq(rdportl.addr)
+        m.d.comb += self.o_rdata[:8].eq(rdportl.data)
+        m.d.comb += self.o_rdata[8:].eq(rdporth.data)
+
         with m.If(self.i_clk2):
             m.d.sync += self.pnhsy.eq(self.i_nhsy)
             m.d.sync += self.pnhbk.eq(self.i_nhbk)
@@ -80,11 +86,11 @@ class k051316(Elaboratable):
                 m.d.comb += cx.eq(self.xcp + self.incxx)
                 m.d.comb += cy.eq(self.ycp + self.incxy)
 
-            m.d.comb += self.o_xcp.eq(cx)
-            m.d.comb += self.o_ycp.eq(cy)
-
             m.d.sync += self.xcp.eq(cx)
             m.d.sync += self.ycp.eq(cy)
+
+            m.d.comb += rdportl.addr.eq(0x155)
+            m.d.comb += rdporth.addr.eq(0x155)
 
             m.d.sync += self.o_ca[ 0: 4].eq(self.xcp[11:15])
             m.d.sync += self.o_ca[ 4: 8].eq(self.ycp[11:15])
@@ -128,9 +134,8 @@ class k051316(Elaboratable):
             vramadr = Signal(10)
             m.d.comb += vramadr[:5].eq(self.xcp[15:20])
             m.d.comb += vramadr[5:].eq(self.ycp[15:20])
-            m.d.sync += rdportl.addr.eq(vramadr)
-            m.d.sync += rdporth.addr.eq(vramadr)
-            m.d.comb += self.o_vramadr.eq(vramadr)
+            m.d.comb += rdportl.addr.eq(vramadr)
+            m.d.comb += rdporth.addr.eq(vramadr)
 
         return m
 

@@ -24,7 +24,7 @@ class k053252(Elaboratable):
         self.o_int1 = Signal(1, reset=1)
         self.o_int2 = Signal(1, reset=1)
         self.o_fcnt = Signal()
-        self.o_clk2 = Signal(1, reset=1)
+        self.o_clk2 = Signal(1, reset=0)
 
         self.hc       = Signal(10, reset = 0x180)
         self.hfp      = Signal( 9, reset = 0x022)

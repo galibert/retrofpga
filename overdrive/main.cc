@@ -191,7 +191,7 @@ void run_design()
     for(int y = 0; y != 384; y++) {
       u32 v = overdrive.p_o__ci4.curr.data[0];
       u16 c = palette[v | 0x600];
-      printf("%03d.%03d.a: ca=%06x xcp=%06x ycp=%06x vramadr=%03x\n", x, y, overdrive.p_o__ca.curr.data[0], overdrive.p_o__xcp.curr.data[0], overdrive.p_o__ycp.curr.data[0], overdrive.p_o__vramadr.curr.data[0]);
+      printf("%03d.%03d.%d: ca=%06x xcp=%06x ycp=%06x vramadr=%03x data=%04x\n", x, y, overdrive.p_o__clk2.curr.data[0], overdrive.p_o__ca.curr.data[0], overdrive.p_o__xcp.curr.data[0], overdrive.p_o__ycp.curr.data[0], overdrive.p_o__vramadr.curr.data[0], overdrive.p_o__rdata.curr.data[0]);
       //      c = overdrive.p_o__vramadr.curr.data[0];
 
       u8 r = c & 31;
@@ -255,7 +255,7 @@ void run_design()
       overdrive.eval();
       overdrive.commit();
 
-      printf("%03d.%03d.b: ca=%06x xcp=%06x ycp=%06x vramadr=%03x\n", x, y, overdrive.p_o__ca.curr.data[0], overdrive.p_o__xcp.curr.data[0], overdrive.p_o__ycp.curr.data[0], overdrive.p_o__vramadr.curr.data[0]);
+      printf("%03d.%03d.%d: ca=%06x xcp=%06x ycp=%06x vramadr=%03x data=%04x\n", x, y, overdrive.p_o__clk2.curr.data[0], overdrive.p_o__ca.curr.data[0], overdrive.p_o__xcp.curr.data[0], overdrive.p_o__ycp.curr.data[0], overdrive.p_o__vramadr.curr.data[0], overdrive.p_o__rdata.curr.data[0]);
 
       overdrive.posedge_p_clk = true;
       overdrive.eval();

@@ -28,6 +28,8 @@ class overdrive(Elaboratable):
         self.o_xcp = Signal(24)
         self.o_ycp = Signal(24)
         self.o_vramadr = Signal(10)
+        self.o_rdata = Signal(16)
+        self.o_clk2 = Signal()
 
         self.m_timings = k053252.k053252()
         self.m_roz_1   = k051316.k051316('captures/first_1_roz_1.bin', [ 0, 0x800, 0, 0, 0, 0x800, 0, 7 ])
@@ -54,6 +56,12 @@ class overdrive(Elaboratable):
         m.d.comb += self.o_nvsy.eq(self.m_timings.o_nvsy)
         m.d.comb += self.o_nhbk.eq(self.m_timings.o_nhbk)
         m.d.comb += self.o_nvbk.eq(self.m_timings.o_nvbk)
+        m.d.comb += self.o_ca.eq(self.m_roz_1.o_ca)
+        m.d.comb += self.o_xcp.eq(self.m_roz_1.o_xcp)
+        m.d.comb += self.o_ycp.eq(self.m_roz_1.o_ycp)
+        m.d.comb += self.o_vramadr.eq(self.m_roz_1.o_vramadr)
+        m.d.comb += self.o_rdata.eq(self.m_roz_1.o_rdata)
+        m.d.comb += self.o_clk2.eq(self.m_timings.o_clk2)
 
         m.d.comb += self.m_roz_1.i_clk2.eq(self.m_timings.o_clk2)
         m.d.comb += self.m_roz_1.i_nhsy.eq(self.m_timings.o_nhsy)
@@ -66,11 +74,6 @@ class overdrive(Elaboratable):
         with m.Else():
             m.d.comb += self.o_ci4[:4].eq(roz1rd.data[:4])
         m.d.comb += self.o_ci4[4:].eq(self.m_roz_1.o_ca[18:22])
-
-        m.d.comb += self.o_ca.eq(self.m_roz_1.o_ca)
-        m.d.comb += self.o_xcp.eq(self.m_roz_1.o_xcp)
-        m.d.comb += self.o_ycp.eq(self.m_roz_1.o_ycp)
-        m.d.comb += self.o_vramadr.eq(self.m_roz_1.o_vramadr)
 
         m.d.comb += self.m_roz_2.i_clk2.eq(self.m_timings.o_clk2)
         m.d.comb += self.m_roz_2.i_nhsy.eq(self.m_timings.o_nhsy)
