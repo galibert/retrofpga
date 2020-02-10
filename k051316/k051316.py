@@ -67,10 +67,10 @@ class k051316(Elaboratable):
             cx = Signal(24)
             cy = Signal(24)
 
-            with m.If((~self.pnhsy) & self.i_nhsy):
+            with m.If((~self.pnhbk) & self.i_nhbk):
                 m.d.sync += self.pnvsy.eq(self.i_nvsy)
                 m.d.sync += self.pnvbk.eq(self.i_nvbk)
-                with m.If((~self.pnvsy) & self.i_nvsy):
+                with m.If((~self.pnvbk) & self.i_nvbk):
                     m.d.comb += cx[8:].eq(self.start_x)
                     m.d.comb += cy[8:].eq(self.start_y)
                     m.d.comb += cx[:8].eq(0)
@@ -89,8 +89,8 @@ class k051316(Elaboratable):
             m.d.sync += self.xcp.eq(cx)
             m.d.sync += self.ycp.eq(cy)
 
-            m.d.comb += rdportl.addr.eq(0x155)
-            m.d.comb += rdporth.addr.eq(0x155)
+            m.d.comb += rdportl.addr.eq(0x000)
+            m.d.comb += rdporth.addr.eq(0x000)
 
             m.d.sync += self.o_ca[ 0: 4].eq(self.xcp[11:15])
             m.d.sync += self.o_ca[ 4: 8].eq(self.ycp[11:15])

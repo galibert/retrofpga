@@ -14,6 +14,13 @@ def rom_load_bytes(fname):
         r.append(rawdata[i])
     return r
 
+def rom_load_bytes_swap(fname):
+    rawdata = open(fname, 'rb').read()
+    r = []
+    for i in range(0, len(rawdata)):
+        r.append(rawdata[i^1])
+    return r
+
 class overdrive(Elaboratable):
     def __init__(self):
         self.o_nhsy = Signal()
@@ -33,7 +40,7 @@ class overdrive(Elaboratable):
 
         self.m_timings = k053252.k053252()
         self.m_roz_1   = k051316.k051316('captures/first_1_roz_1.bin', [ 0, 0x800, 0, 0, 0, 0x800, 0, 7 ])
-        self.m_roz_2   = k051316.k051316('captures/first_1_roz_2.bin', [ 0x400b, 0, 0xf6, -0x5602, -0x1f7, 0, 0, 3 ])
+        self.m_roz_2   = k051316.k051316('captures/first_1_roz_2.bin', [ 0xb40, 0, -0xa00, -0x157, 0x9fe, 0, 0, 3 ])
 
         roz1r = rom_load_bytes("roms/789e06.a21")
         self.roz1_rom = Memory(width = 8, depth = 0x20000, init = roz1r)
@@ -56,11 +63,12 @@ class overdrive(Elaboratable):
         m.d.comb += self.o_nvsy.eq(self.m_timings.o_nvsy)
         m.d.comb += self.o_nhbk.eq(self.m_timings.o_nhbk)
         m.d.comb += self.o_nvbk.eq(self.m_timings.o_nvbk)
-        m.d.comb += self.o_ca.eq(self.m_roz_1.o_ca)
-        m.d.comb += self.o_xcp.eq(self.m_roz_1.o_xcp)
-        m.d.comb += self.o_ycp.eq(self.m_roz_1.o_ycp)
-        m.d.comb += self.o_vramadr.eq(self.m_roz_1.o_vramadr)
-        m.d.comb += self.o_rdata.eq(self.m_roz_1.o_rdata)
+
+        m.d.comb += self.o_ca.eq(self.m_roz_2.o_ca)
+        m.d.comb += self.o_xcp.eq(self.m_roz_2.o_xcp)
+        m.d.comb += self.o_ycp.eq(self.m_roz_2.o_ycp)
+        m.d.comb += self.o_vramadr.eq(self.m_roz_2.o_vramadr)
+        m.d.comb += self.o_rdata.eq(self.m_roz_2.o_rdata)
         m.d.comb += self.o_clk2.eq(self.m_timings.o_clk2)
 
         m.d.comb += self.m_roz_1.i_clk2.eq(self.m_timings.o_clk2)
@@ -69,7 +77,9 @@ class overdrive(Elaboratable):
         m.d.comb += self.m_roz_1.i_nvsy.eq(self.m_timings.o_nvsy)
         m.d.comb += self.m_roz_1.i_nvbk.eq(self.m_timings.o_nvbk)
         m.d.comb += roz1rd.addr.eq(self.m_roz_1.o_ca[1:18])
-        with m.If(self.m_roz_1.o_ca[0]):
+        with m.If(self.m_roz_1.o_oblk):
+            m.d.comb += self.o_ci4[:4].eq(0)
+        with m.Elif(self.m_roz_1.o_ca[0]):
             m.d.comb += self.o_ci4[:4].eq(roz1rd.data[4:])
         with m.Else():
             m.d.comb += self.o_ci4[:4].eq(roz1rd.data[:4])
@@ -81,10 +91,12 @@ class overdrive(Elaboratable):
         m.d.comb += self.m_roz_2.i_nvsy.eq(self.m_timings.o_nvsy)
         m.d.comb += self.m_roz_2.i_nvbk.eq(self.m_timings.o_nvbk)
         m.d.comb += roz2rd.addr.eq(self.m_roz_2.o_ca[1:18])
-        with m.If(self.m_roz_2.o_ca[0]):
-            m.d.comb += self.o_ci3[:4].eq(roz2rd.data[4:])
-        with m.Else():
+        with m.If(self.m_roz_2.o_oblk):
+            m.d.comb += self.o_ci3[:4].eq(0)
+        with m.Elif(self.m_roz_2.o_ca[0]):
             m.d.comb += self.o_ci3[:4].eq(roz2rd.data[:4])
+        with m.Else():
+            m.d.comb += self.o_ci3[:4].eq(roz2rd.data[4:])
         m.d.comb += self.o_ci3[4:].eq(self.m_roz_2.o_ca[18:22])
 
         m.d.comb += self.m_timings.i_ccs.eq(1)
