@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <zlib.h>
 
-#define COMPAT
+#include <functional>
 
 typedef   signed char  s8;
 typedef unsigned char  u8;
@@ -45,7 +45,24 @@ typedef unsigned long  u64;
 // os  2: 0
 // 251  : [0 0 0 0 3e] [0 0] [0 0] 24 37 0 0 e
 
+//#ifdef COMPAT
+//    overdrive.p_clk.next = value<1>{1u};
+//    overdrive.step();
+//    overdrive.p_clk.next = value<1>{0u};
+//    overdrive.step();
+//#else
+//    // even less compatible but even faster code: omit delta cycles
+//    overdrive.posedge_p_clk = true;
+//    overdrive.eval();
+//    overdrive.commit();
+//#endif
+//    // less compatible but slightly faster code: trigger events directly
+//    // overdrive.posedge_p_clk = true;
+//    // overdrive.step();
+
 u16 *palette;
+u8 *roz_1_ram;
+u8 *roz_2_ram;
 
 u16 vram[0x20*0x20];
 
@@ -152,21 +169,289 @@ void *file_load(const char *fname)
   return data;
 }
 
+cxxrtl_design::p_overdrive overdrive;
+
+std::string tdelta(int duration)
+{
+  u64 v = u64(duration)*1000000000/24000000;
+  char buf[4096];
+  sprintf(buf, "%d.%03d_%03d_%03d",
+	  int(v/1000000000),
+	  int((v/1000000) % 1000),
+	  int((v/1000) % 1000),
+	  int(v % 1000));
+  return buf;
+}
+
+int p24tick = 0;
+int p12tick = 0;
+int n12tick = 0;
+int p6tick = 0;
+int n6tick = 0;
+
+#define R(port) (overdrive.port.curr.data[0])
+#define W(port, bits, val) overdrive.port.next = value<bits>(val)
+
+void show(const char *mark = "")
+{
+  printf("%6d: %c%c %c%c %c%c %c%c%c%c  psac1cs=%d psac1csd1=%d psac1csd2=%d pset1=%d pcs1=%d as=%d rw=%d dtack=%d data=%04x %s\n",
+	 p24tick,
+	 R(p_o__p12m) ? '#' : '-',
+	 R(p_o__n12m) ? '#' : '-',
+	 R(p_o__p6m)  ? '#' : '-',
+	 R(p_o__n6m)  ? '#' : '-',
+	 R(p_o__p6md) ? '#' : '-',
+	 R(p_o__n6md) ? '#' : '-',
+	 R(p_o__nvbk) ? '-' : 'v',
+	 R(p_o__nvsy) ? '-' : 'V',
+	 R(p_o__nhbk) ? '-' : 'h',
+	 R(p_o__nhsy) ? '-' : 'H',
+
+	 R(p_o__psac1cs),
+	 R(p_o__psac1csd1),
+	 R(p_o__psac1csd2),
+	 R(p_o__pset1),
+	 R(p_o__pcs1),
+	 R(p_i__as1),
+	 R(p_i__rw1),
+	 R(p_o__dtack1),
+	 R(p_i__db1),
+	 mark);
+}
+
+void reset()
+{
+  W(p_clk, 1, 1u);
+  W(p_rst, 1, 1u);
+  overdrive.step();
+  W(p_clk, 1, 0u);
+  overdrive.step();
+  W(p_clk, 1, 1u);
+  overdrive.step();
+  W(p_clk, 1, 0u);
+  W(p_rst, 1, 0u);
+  overdrive.step();
+}
+
+void tick()
+{
+  W(p_clk, 1, 1u);
+  overdrive.step();
+  W(p_clk, 1, 0u);
+  overdrive.step();
+
+  p24tick ++;
+  if(R(p_o__p12m))
+    p12tick++;
+  if(R(p_o__p12m))
+    n12tick++;
+  if(R(p_o__p6m))
+    p6tick++;
+  if(R(p_o__n6m))
+    n6tick++;
+}
+
+void wait_p12m()
+{
+  do
+    tick();
+  while(!R(p_o__p12m));
+}
+
+void wait_n12m()
+{
+  do
+    tick();
+  while(!R(p_o__n12m));
+}
+
+void wait_p6m()
+{
+  do {
+    tick();
+  } while(!R(p_o__p6m));
+}
+
+void wait_n6m()
+{
+  do
+    tick();
+  while(!R(p_o__n6m));
+}
+
+void wait_p6md()
+{
+  do
+    tick();
+  while(!R(p_o__p6md));
+}
+
+void wait_n6md()
+{
+  do
+    tick();
+  while(!R(p_o__n6md));
+}
+
+void wait_until(std::function<bool ()> cb)
+{
+  do
+    tick();
+  while(!cb());
+}
+
+void m68000_1_w(std::function<void ()> wp, std::function<void ()> wn, u32 adr, u16 val, u8 uds, u8 lds, bool v = false)
+{
+  if(v)
+    printf("Write cycle started %06x %04x %d%d\n", adr, val, uds, lds);
+  wp(); // s0
+  if(v)
+    show("s0");
+  wn(); // s1
+  if(v)
+    show("s1");
+  W(p_i__ab1, 23, adr >> 1);
+  wp(); // s2
+  if(v)
+    show("s2");
+  W(p_i__as1, 1, 0u);
+  W(p_i__rw1, 1, 0u);
+  wn(); // s3
+  if(v)
+    show("s3");
+  W(p_i__db1, 16, val);
+  wp(); // s4
+  if(v)
+    show("s4");
+  W(p_i__uds1, 1, uds);
+  W(p_i__lds1, 1, lds);
+  while(R(p_o__dtack1)) {
+    wn();
+    if(v)
+      show();
+    wp();
+    if(v)
+      show();
+  }
+  wn(); // s5
+  if(v)
+    show("s5");
+  wp(); // s6
+  if(v)
+    show("s6");
+  wn(); // s7
+  if(v)
+    show("s7");
+  W(p_i__as1, 1, 1u);
+  W(p_i__uds1, 1, 1u);
+  W(p_i__lds1, 1, 1u);
+
+  if(v)
+    printf("Write cycle done\n");
+}
+
+u16 m68000_1_r(std::function<void ()> wp, std::function<void ()> wn, u32 adr, u8 uds, u8 lds, bool v = false)
+{
+  if(v)
+    printf("Read cycle started %06x %d%d\n", adr, uds, lds);
+  wp(); // s0
+  if(v)
+    show("s0");
+  W(p_i__rw1, 1, 1u);
+  wn(); // s1
+  if(v)
+    show("s1");
+  W(p_i__ab1, 23, adr >> 1);
+  wp(); // s2
+  if(v)
+    show("s2");
+  W(p_i__as1, 1, 0u);
+  W(p_i__uds1, 1, uds);
+  W(p_i__lds1, 1, lds);
+  wn(); // s3
+  if(v)
+    show("s3");
+  wp(); // s4
+  if(v)
+    show("s4");
+  while(R(p_o__dtack1)) {
+    wn();
+    if(v)
+      show();
+    wp();
+    if(v)
+      show();
+  }
+  wn(); // s5
+  if(v)
+    show("s5");
+  wp(); // s6
+  if(v)
+    show("s6");
+  u16 val = R(p_o__db1);
+  wn(); // s7
+  if(v)
+    show("s7");
+  W(p_i__as1, 1, 1u);
+  W(p_i__uds1, 1, 1u);
+  W(p_i__lds1, 1, 1u);
+
+  if(v)
+    printf("Read cycle done -> %04x\n", val);
+
+  return val;
+}
+
 void run_design()
 {
-  cxxrtl_design::p_overdrive overdrive;
+  W(p_i__uds1, 1, 1u);
+  W(p_i__lds1, 1, 1u);
+  W(p_i__as1,  1, 1u);
+  W(p_i__ab1, 23, 0u);
+  W(p_i__db1, 16, 0u);
+  W(p_i__rw1,  1, 1u);
 
+  reset();
+  do
+    wait_p6m();
+  while(!(R(p_o__nvbk) & R(p_o__nhbk)));
+
+  for(int i=0; i<100; i++)
+    tick();
+
+  m68000_1_w(wait_n12m, wait_p12m, 0x100000, 0x01, 0, 1);
+  m68000_1_w(wait_n12m, wait_p12m, 0x100002, 0x80, 0, 1);
+  m68000_1_w(wait_n12m, wait_p12m, 0x100004, 0x00, 0, 1);
+  m68000_1_w(wait_n12m, wait_p12m, 0x100006, 0x22, 0, 1);
+  m68000_1_w(wait_n12m, wait_p12m, 0x100008, 0x00, 0, 1);
+  m68000_1_w(wait_n12m, wait_p12m, 0x10000a, 0x0d, 0, 1);
+  m68000_1_w(wait_n12m, wait_p12m, 0x100010, 0x01, 0, 1);
+  m68000_1_w(wait_n12m, wait_p12m, 0x100012, 0x08, 0, 1);
+  m68000_1_w(wait_n12m, wait_p12m, 0x100014, 0x10, 0, 1);
+  m68000_1_w(wait_n12m, wait_p12m, 0x100016, 0x10, 0, 1);
+  m68000_1_w(wait_n12m, wait_p12m, 0x100018, 0x84, 0, 1);
+
+  for(u32 i=0; i<0x800; i++) {
+    m68000_1_w(wait_n12m, wait_p12m, 0x210000 + 2*i, roz_1_ram[2*i] << 8, 1, 0, true);
+    m68000_1_r(wait_n12m, wait_p12m, 0x210000 + 2*i, 1, 0, true);
+  }
+
+  
+
+#if 0
   //  overdrive.p_i__ccs.next = value<1>{1u};
   //  overdrive.step();
 
   int prev = 0x1010;
 
   for(;;) {
+    // more compatible but slightly slower code: explicitly drive a clock signal
+
     int next =
-      (overdrive.p_o__nvsy.curr.data[0] << 12) |
-      (overdrive.p_o__nvbk.curr.data[0] << 8) |
-      (overdrive.p_o__nhsy.curr.data[0] << 4) |
-      overdrive.p_o__nhbk.curr.data[0];
+      (R(p_o__nvsy) << 12) |
+      (R(p_o__nvbk) << 8) |
+      (R(p_o__nhsy) << 4) |
+      R(p_o__nhbk);
 
     if(next != prev) {
       if((prev & 0x100) && !(next & 0x100))
@@ -174,32 +459,29 @@ void run_design()
       prev = next;
     }
 
-    // more compatible but slightly slower code: explicitly drive a clock signal
-#ifdef COMPAT
-    overdrive.p_clk.next = value<1>{1u};
-    overdrive.step();
-    overdrive.p_clk.next = value<1>{0u};
-    overdrive.step();
-#else
-    overdrive.posedge_p_clk = true;
-    overdrive.eval();
-    overdrive.commit();
-#endif
-    // less compatible but slightly faster code: trigger events directly
-    // overdrive.posedge_p_clk = true;
-    // overdrive.step();
-    // even less compatible but even faster code: omit delta cycles
-
   }
 
   for(int x = 263; x >= 0; x--) {
     for(int y = 0; y != 384; y++) {
-      u32 v = overdrive.p_o__ci3.curr.data[0] | 0x700;
+      do {
+
+	printf("%03d.%03d.%d%d.%d%d.%d%d%d%d: ca=%06x xcp=%06x ycp=%06x vramadr=%03x data=%04x col=%02x\n", x, y,
+	       R(p_o__clk1p),
+	       R(p_o__clk1n),
+	       R(p_o__clk2p),
+	       R(p_o__clk2n),
+	       R(p_o__nvsy),
+	       R(p_o__nvbk),
+	       R(p_o__nhsy),
+	       R(p_o__nhbk),
+	       R(p_o__ca), R(p_o__xcp), R(p_o__ycp), R(p_o__vramadr), R(p_o__rdata), R(p_o__ci3));
+      } while(!overdrive.p_o__clk2p.curr.data[0]);
+
+      u32 v = R(p_o__ci3) | 0x700;
       if(!(v & 15))
-	 v = overdrive.p_o__ci4.curr.data[0] | 0x600;
+	v = R(p_o__ci4) | 0x600;
       u16 c = palette[v];
-      printf("%03d.%03d.%d: ca=%06x xcp=%06x ycp=%06x vramadr=%03x data=%04x col=%02x\n", x, y, overdrive.p_o__clk2.curr.data[0], overdrive.p_o__ca.curr.data[0], overdrive.p_o__xcp.curr.data[0], overdrive.p_o__ycp.curr.data[0], overdrive.p_o__vramadr.curr.data[0], overdrive.p_o__rdata.curr.data[0], overdrive.p_o__ci3.curr.data[0]);
-      //      c = overdrive.p_o__vramadr.curr.data[0];
+      //      c = R(p_o__vramadr);
 
       u8 r = c & 31;
       u8 g = (c >> 5) & 31;
@@ -233,16 +515,16 @@ void run_design()
       }
 
       if(0) {
-	if(!overdrive.p_o__nvbk.curr.data[0])
+	if(!R(p_o__nvbk))
 	  bcol |= 0x00ffff;
-	if(!overdrive.p_o__nhbk.curr.data[0])
+	if(!R(p_o__nhbk))
 	  bcol |= 0xff0000;
       }
 
       unsigned int ccol = 0;
-      if(!overdrive.p_o__nvsy.curr.data[0])
+      if(!R(p_o__nvsy))
 	ccol |= 0x00ffff;
-      if(!overdrive.p_o__nhsy.curr.data[0])
+      if(!R(p_o__nhsy))
 	ccol |= 0xff0000;
 
       auto p = image + y*SY + x*SX;
@@ -257,32 +539,9 @@ void run_design()
       p[0] = bcol >> 16; p[1] = bcol >> 8; p[2] = bcol;
       p[3] = bcol >> 16; p[4] = bcol >> 8; p[5] = bcol;
       p[6] = bcol >> 16; p[7] = bcol >> 8; p[8] = bcol;
-      
-#ifdef COMPAT
-      overdrive.p_clk.next = value<1>{1u};
-      overdrive.step();
-      overdrive.p_clk.next = value<1>{0u};
-      overdrive.step();
-#else
-      overdrive.posedge_p_clk = true;
-      overdrive.eval();
-      overdrive.commit();
-#endif
-
-      printf("%03d.%03d.%d: ca=%06x xcp=%06x ycp=%06x vramadr=%03x data=%04x col=%02x\n", x, y, overdrive.p_o__clk2.curr.data[0], overdrive.p_o__ca.curr.data[0], overdrive.p_o__xcp.curr.data[0], overdrive.p_o__ycp.curr.data[0], overdrive.p_o__vramadr.curr.data[0], overdrive.p_o__rdata.curr.data[0], overdrive.p_o__ci3.curr.data[0]);
-
-#ifdef COMPAT
-      overdrive.p_clk.next = value<1>{1u};
-      overdrive.step();
-      overdrive.p_clk.next = value<1>{0u};
-      overdrive.step();
-#else
-      overdrive.posedge_p_clk = true;
-      overdrive.eval();
-      overdrive.commit();
-#endif
     }
   }
+#endif
 }
 
 char *selname;
@@ -374,6 +633,12 @@ int main(int argc, char **argv)
   palette = static_cast<u16 *>(file_load(path));
   for(int i=0; i != 2048; i++)
     palette[i] = (palette[i] << 8) | (palette[i] >> 8);
+
+  sprintf(path, "captures/%s_%d_roz_1.bin", selname, selid);
+  roz_1_ram = static_cast<u8 *>(file_load(path));
+
+  sprintf(path, "captures/%s_%d_roz_2.bin", selname, selid);
+  roz_2_ram = static_cast<u8 *>(file_load(path));
 
   u8 *vr = static_cast<u8 *>(file_load("captures/first_1_roz_1.bin"));
   for(int i=0; i<0x20*0x20; i++)

@@ -4,8 +4,6 @@ sys.path.append('..')
 from k053252 import k053252
 from k051316 import k051316
 from nmigen import *
-from nmigen.back import rtlil
-from nmigen.back.pysim import *
 
 def rom_load_bytes(fname):
     rawdata = open(fname, 'rb').read()
@@ -23,6 +21,21 @@ def rom_load_bytes_swap(fname):
 
 class overdrive(Elaboratable):
     def __init__(self):
+        self.i_ab1    = Signal(23)
+        self.i_db1    = Signal(16)
+        self.o_db1    = Signal(16)
+        self.i_uds1   = Signal()
+        self.i_lds1   = Signal()
+        self.i_as1    = Signal()
+        self.i_rw1    = Signal()
+        self.o_dtack1 = Signal()
+
+        self.o_pset1  = Signal()
+        self.o_pcs1  = Signal()
+        self.o_psac1cs = Signal()
+        self.o_psac1csd1 = Signal()
+        self.o_psac1csd2 = Signal()
+
         self.o_nhsy = Signal()
         self.o_nhbk = Signal()
         self.o_nvsy = Signal()
@@ -36,11 +49,18 @@ class overdrive(Elaboratable):
         self.o_ycp = Signal(24)
         self.o_vramadr = Signal(10)
         self.o_rdata = Signal(16)
-        self.o_clk2 = Signal()
+        self.o_p12m = Signal()
+        self.o_n12m = Signal()
+        self.o_p6m  = Signal()
+        self.o_n6m  = Signal()
+        self.o_p6md = Signal()
+        self.o_n6md = Signal()
 
         self.m_timings = k053252.k053252()
-        self.m_roz_1   = k051316.k051316('captures/first_1_roz_1.bin', [ 0, 0x800, 0, 0, 0, 0x800, 0, 7 ])
-        self.m_roz_2   = k051316.k051316('captures/first_1_roz_2.bin', [ 0xb40, 0, -0xa00, -0x157, 0x9fe, 0, 0, 3 ])
+#        self.m_roz_1   = k051316.k051316('captures/first_1_roz_1.bin', [ 0, 0x800, 0, 0, 0, 0x800, 0, 7 ])
+#        self.m_roz_2   = k051316.k051316('captures/first_1_roz_2.bin', [ 0xb40, 0, -0xa00, -0x157, 0x9fe, 0, 0, 3 ])
+        self.m_roz_1   = k051316.k051316()
+        self.m_roz_2   = k051316.k051316()
 
         roz1r = rom_load_bytes("roms/789e06.a21")
         self.roz1_rom = Memory(width = 8, depth = 0x20000, init = roz1r)
@@ -59,23 +79,153 @@ class overdrive(Elaboratable):
         roz2rd = self.roz2_rom.read_port()
         m.submodules += [roz1rd, roz2rd]
 
-        m.d.comb += self.o_nhsy.eq(self.m_timings.o_nhsy)
-        m.d.comb += self.o_nvsy.eq(self.m_timings.o_nvsy)
-        m.d.comb += self.o_nhbk.eq(self.m_timings.o_nhbk)
-        m.d.comb += self.o_nvbk.eq(self.m_timings.o_nvbk)
-
+        # Debug hookups
         m.d.comb += self.o_ca.eq(self.m_roz_2.o_ca)
         m.d.comb += self.o_xcp.eq(self.m_roz_2.o_xcp)
         m.d.comb += self.o_ycp.eq(self.m_roz_2.o_ycp)
         m.d.comb += self.o_vramadr.eq(self.m_roz_2.o_vramadr)
         m.d.comb += self.o_rdata.eq(self.m_roz_2.o_rdata)
-        m.d.comb += self.o_clk2.eq(self.m_timings.o_clk2)
 
-        m.d.comb += self.m_roz_1.i_clk2.eq(self.m_timings.o_clk2)
-        m.d.comb += self.m_roz_1.i_nhsy.eq(self.m_timings.o_nhsy)
-        m.d.comb += self.m_roz_1.i_nhbk.eq(self.m_timings.o_nhbk)
-        m.d.comb += self.m_roz_1.i_nvsy.eq(self.m_timings.o_nvsy)
-        m.d.comb += self.m_roz_1.i_nvbk.eq(self.m_timings.o_nvbk)
+        # Address decoder 1
+        rom1cs   = Signal()
+        ram1cs   = Signal()
+        cramcs   = Signal()
+        ccucs    = Signal()
+        afr      = Signal()
+        adccs    = Signal()
+        swrd     = Signal()
+        radiosw  = Signal()
+        mdcs1    = Signal()
+        mdcs2    = Signal()
+        psacset1 = Signal()
+        psacset2 = Signal()
+        pcucs    = Signal()
+        soundcs1 = Signal()
+        soundcs2 = Signal()
+        soundon  = Signal()
+        wrport1  = Signal()
+        wrport2  = Signal()
+        hcomcs   = Signal()
+        psac1cs  = Signal()
+        psac2cs  = Signal()
+        psaccha1 = Signal()
+        psaccha2 = Signal()
+        hostint1 = Signal()
+        hostint2 = Signal()
+
+        m.d.comb += rom1cs.eq(   ~((self.i_ab1[18-1:22-1] == 0x00) & (self.i_as1 == 0)))
+        m.d.comb += ram1cs.eq(   ~((self.i_ab1[18-1:22-1] == 0x01) & (self.i_as1 == 0)))
+        m.d.comb += cramcs.eq(   ~((self.i_ab1[18-1:22-1] == 0x02) & (self.i_as1 == 0)))
+        m.d.comb += swrd.eq(     ~((self.i_ab1[16-1:22-1] == 0x0c) & (self.i_as1 == 0)))
+        m.d.comb += radiosw.eq(  ~((self.i_ab1[16-1:22-1] == 0x0d) & (self.i_as1 == 0)))
+        m.d.comb += mdcs1.eq(    ~((self.i_ab1[16-1:22-1] == 0x0e) & (self.i_as1 == 0)))
+        m.d.comb += mdcs2.eq(    ~((self.i_ab1[16-1:22-1] == 0x0f) & (self.i_as1 == 0)))
+        m.d.comb += ccucs.eq(    ~((self.i_ab1[18-1:22-1] == 0x04) & (self.i_as1 == 0)))
+        m.d.comb += afr.eq(      ~((self.i_ab1[18-1:22-1] == 0x05) & (self.i_as1 == 0)))
+        m.d.comb += adccs.eq(    ~((self.i_ab1[18-1:22-1] == 0x06) & (self.i_as1 == 0)))
+        m.d.comb += psacset1.eq( ~((self.i_ab1[15-1:22-1] == 0x38) & (self.i_as1 == 0)))
+        m.d.comb += psacset2.eq( ~((self.i_ab1[15-1:22-1] == 0x39) & (self.i_as1 == 0)))
+        m.d.comb += pcucs.eq(    ~((self.i_ab1[15-1:22-1] == 0x3a) & (self.i_as1 == 0)))
+        m.d.comb += soundcs1.eq( ~((self.i_ab1[15-1:22-1] == 0x3b) & (self.i_as1 == 0)))
+        m.d.comb += soundcs2.eq( ~((self.i_ab1[15-1:22-1] == 0x3c) & (self.i_as1 == 0)))
+        m.d.comb += soundon.eq(  ~((self.i_ab1[15-1:22-1] == 0x3d) & (self.i_as1 == 0)))
+        m.d.comb += wrport1.eq(  ~((self.i_ab1[15-1:22-1] == 0x3e) & (self.i_as1 == 0)))
+        m.d.comb += wrport2.eq(  ~((self.i_ab1[15-1:22-1] == 0x3f) & (self.i_as1 == 0)))
+        m.d.comb += hcomcs.eq(   ~((self.i_ab1[15-1:18-1] ==  0x0) & (self.i_ab1[21-1] == 1) & (self.i_ab1[23-1] == 0) & (self.i_as1 == 0)))
+        m.d.comb += psac1cs.eq(  ~((self.i_ab1[15-1:18-1] ==  0x2) & (self.i_ab1[21-1] == 1) & (self.i_ab1[23-1] == 0) & (self.i_as1 == 0)))
+        m.d.comb += psac2cs.eq(  ~((self.i_ab1[15-1:18-1] ==  0x3) & (self.i_ab1[21-1] == 1) & (self.i_ab1[23-1] == 0) & (self.i_as1 == 0)))
+        m.d.comb += psaccha1.eq( ~((self.i_ab1[15-1:18-1] ==  0x4) & (self.i_ab1[21-1] == 1) & (self.i_ab1[23-1] == 0) & (self.i_as1 == 0)))
+        m.d.comb += psaccha2.eq( ~((self.i_ab1[15-1:18-1] ==  0x5) & (self.i_ab1[21-1] == 1) & (self.i_ab1[23-1] == 0) & (self.i_as1 == 0)))
+        m.d.comb += hostint1.eq( ~((self.i_ab1[15-1:18-1] ==  0x6) & (self.i_ab1[21-1] == 1) & (self.i_ab1[23-1] == 0) & (self.i_as1 == 0)))
+        m.d.comb += hostint2.eq( ~((self.i_ab1[15-1:18-1] ==  0x7) & (self.i_ab1[21-1] == 1) & (self.i_ab1[23-1] == 0) & (self.i_as1 == 0)))
+        
+        # dtack 1
+        hcomdtk  = Signal(reset = 1)
+        psacdtk  = Signal(reset = 1)
+        m.d.comb += self.o_dtack1.eq(hcomdtk & hostint1 & hostint2 & psacdtk & (self.i_as1 | self.i_ab1[21-1]))
+
+        # data bus collection 1
+        m.d.comb += self.o_db1[0:8].eq(self.m_timings.o_db)
+        m.d.comb += self.o_db1[8:16].eq(self.m_roz_1.o_db & self.m_roz_2.o_db)
+
+
+        # Timings hookup
+        m.d.comb += self.m_timings.i_ab.eq(self.i_ab1[:4])
+        m.d.comb += self.m_timings.i_db.eq(self.i_db1[0:8])
+        m.d.comb += self.m_timings.i_rw.eq(self.i_rw1)
+        m.d.comb += self.m_timings.i_ccs.eq(ccucs)
+        m.d.comb += self.m_timings.i_clkp.eq(1)
+        m.d.comb += self.o_nhsy.eq(self.m_timings.o_nhsy)
+        m.d.comb += self.o_nvsy.eq(self.m_timings.o_nvsy)
+        m.d.comb += self.o_nhbk.eq(self.m_timings.o_nhbk)
+        m.d.comb += self.o_nvbk.eq(self.m_timings.o_nvbk)
+        m.d.comb += self.o_p12m.eq(self.m_timings.o_clk1p)
+        m.d.comb += self.o_n12m.eq(self.m_timings.o_clk1n)
+        m.d.comb += self.o_p6m.eq (self.m_timings.o_clk2p)
+        m.d.comb += self.o_n6m.eq (self.m_timings.o_clk2n)
+        m.d.comb += self.o_p6md.eq(self.m_timings.o_clk4p)
+        m.d.comb += self.o_n6md.eq(self.m_timings.o_clk4n)
+
+        # p12m = clk1p
+        # n12m = clk1n
+        # p6m  = clk2p
+        # n6m  = clk2n
+        # p6md = clk4p
+        # p6md = clk4n
+
+        # General ROZ hookup
+        pcs1 = Signal()
+        pcs2 = Signal()
+        pset1 = Signal()
+        pset2 = Signal()
+        psac1csd1 = Signal()
+        psac1csd2 = Signal()
+        psac2csd1 = Signal()
+        psac2csd2 = Signal()
+        psacchad1 = Signal()
+        
+        with m.If(self.i_as1):
+            m.d.sync += psac1csd1.eq(1)
+            m.d.sync += psac1csd2.eq(1)
+            m.d.sync += pset1.eq(1)
+            m.d.sync += psac2csd1.eq(1)
+            m.d.sync += psac2csd2.eq(1)
+            m.d.sync += pset2.eq(1)
+        with m.Elif(self.m_timings.o_clk4n):
+            m.d.sync += psac1csd1.eq(psac1cs)
+            m.d.sync += psac1csd2.eq(psac1csd1)
+            m.d.sync += pset1.eq(psacset1)
+            m.d.sync += psac2csd1.eq(psac2cs)
+            m.d.sync += psac2csd2.eq(psac2csd1)
+            m.d.sync += pset2.eq(psacset2)
+
+        m.d.comb += [self.o_psac1cs.eq(psac1cs), self.o_psac1csd1.eq(psac1csd1), self.o_psac1csd2.eq(psac1csd2)]
+        m.d.comb += pcs1.eq(~((~psac1csd1) & (self.i_rw1 | psac1csd2)))
+        m.d.comb += pcs2.eq(~((~psac2csd1) & (self.i_rw1 | psac2csd2)))
+
+        with m.If(self.i_as1):
+            m.d.sync += psacchad1.eq(1)
+            m.d.sync += psacdtk.eq(1)
+        with m.Elif(self.m_timings.o_clk2n):
+            m.d.sync += psacchad1.eq(~(psaccha1 & psaccha2))
+            m.d.sync += psacdtk.eq(psacchad1 & psac1csd1 & psac1csd1)
+
+        m.d.comb += self.o_pset1.eq(pset1)
+        m.d.comb += self.o_pcs1.eq(pcs1)
+        
+        # ROZ1 hookup including rom
+        m.d.comb += self.m_roz_1.i_vrcs.eq(pcs1)
+        m.d.comb += self.m_roz_1.i_m12p.eq(self.m_timings.o_clk1n)
+        m.d.comb += self.m_roz_1.i_m12n.eq(self.m_timings.o_clk1p)
+        m.d.comb += self.m_roz_1.i_m6p.eq(self.m_timings.o_clk2n)
+        m.d.comb += self.m_roz_1.i_m6n.eq(self.m_timings.o_clk2p)
+        with m.If(self.m_timings.o_clk2n):
+            m.d.sync += self.m_roz_1.i_ab.eq(self.i_ab1[:11])
+        with m.If(self.m_timings.o_clk2p):
+            m.d.sync += self.m_roz_1.i_nhsy.eq(self.m_timings.o_nhsy)
+            m.d.sync += self.m_roz_1.i_nhbk.eq(self.m_timings.o_nhbk)
+            m.d.sync += self.m_roz_1.i_nvsy.eq(self.m_timings.o_nvsy)
+            m.d.sync += self.m_roz_1.i_nvbk.eq(self.m_timings.o_nvbk)
         m.d.comb += roz1rd.addr.eq(self.m_roz_1.o_ca[1:18])
         with m.If(self.m_roz_1.o_oblk):
             m.d.comb += self.o_ci4[:4].eq(0)
@@ -85,11 +235,19 @@ class overdrive(Elaboratable):
             m.d.comb += self.o_ci4[:4].eq(roz1rd.data[:4])
         m.d.comb += self.o_ci4[4:].eq(self.m_roz_1.o_ca[18:22])
 
-        m.d.comb += self.m_roz_2.i_clk2.eq(self.m_timings.o_clk2)
-        m.d.comb += self.m_roz_2.i_nhsy.eq(self.m_timings.o_nhsy)
-        m.d.comb += self.m_roz_2.i_nhbk.eq(self.m_timings.o_nhbk)
-        m.d.comb += self.m_roz_2.i_nvsy.eq(self.m_timings.o_nvsy)
-        m.d.comb += self.m_roz_2.i_nvbk.eq(self.m_timings.o_nvbk)
+        # ROZ2 hookup including rom
+        m.d.comb += self.m_roz_2.i_vrcs.eq(pcs2)
+        m.d.comb += self.m_roz_2.i_m12p.eq(self.m_timings.o_clk1n)
+        m.d.comb += self.m_roz_2.i_m12n.eq(self.m_timings.o_clk1p)
+        m.d.comb += self.m_roz_2.i_m6p.eq(self.m_timings.o_clk2n)
+        m.d.comb += self.m_roz_2.i_m6n.eq(self.m_timings.o_clk2p)
+        with m.If(self.m_timings.o_clk2n):
+            m.d.sync += self.m_roz_2.i_ab.eq(self.i_ab1[:11])
+        with m.If(self.m_timings.o_clk2p):
+            m.d.sync += self.m_roz_2.i_nhsy.eq(self.m_timings.o_nhsy)
+            m.d.sync += self.m_roz_2.i_nhbk.eq(self.m_timings.o_nhbk)
+            m.d.sync += self.m_roz_2.i_nvsy.eq(self.m_timings.o_nvsy)
+            m.d.sync += self.m_roz_2.i_nvbk.eq(self.m_timings.o_nvbk)
         m.d.comb += roz2rd.addr.eq(self.m_roz_2.o_ca[1:18])
         with m.If(self.m_roz_2.o_oblk):
             m.d.comb += self.o_ci3[:4].eq(0)
@@ -99,50 +257,12 @@ class overdrive(Elaboratable):
             m.d.comb += self.o_ci3[:4].eq(roz2rd.data[4:])
         m.d.comb += self.o_ci3[4:].eq(self.m_roz_2.o_ca[18:22])
 
-        m.d.comb += self.m_timings.i_ccs.eq(1)
-        m.d.comb += self.m_timings.i_ab.eq(0)
-        m.d.comb += self.m_timings.i_db.eq(0)
-        m.d.comb += self.m_timings.i_rw.eq(1)
-
         m.d.comb += self.m_roz_1.i_iocs.eq(1)
-        m.d.comb += self.m_roz_1.i_vrcs.eq(1)
-        m.d.comb += self.m_roz_1.i_ab.eq(0)
         m.d.comb += self.m_roz_1.i_db.eq(0)
-        m.d.comb += self.m_roz_1.i_rw.eq(1)
+        m.d.comb += self.m_roz_1.i_rw.eq(self.i_rw1)
 
         m.d.comb += self.m_roz_2.i_iocs.eq(1)
-        m.d.comb += self.m_roz_2.i_vrcs.eq(1)
-        m.d.comb += self.m_roz_2.i_ab.eq(0)
-        m.d.comb += self.m_roz_2.i_db.eq(0)
-        m.d.comb += self.m_roz_2.i_rw.eq(1)
+        m.d.comb += self.m_roz_2.i_db.eq(self.i_ab1[:11])
+        m.d.comb += self.m_roz_2.i_rw.eq(self.i_rw1)
+        
         return m
-
-
-if True:
-    rtlil_text = rtlil.convert(overdrive(), platform=None, name="overdrive")
-    print("""
-    read_ilang <<rtlil
-    {}
-    rtlil
-    proc
-    flatten
-    memory_collect
-    expose w:o_* w:*$next %d
-    opt -full
-    clean -purge
-    write_cxxrtl
-    """.format(rtlil_text))
-else:
-    over = overdrive()
-    sim = Simulator(over)
-
-    sim.add_clock(1/(12e6), phase=0, domain="sync")
-
-    def stimulus_proc():
-        while True:
-            yield Tick()
-
-    sim.add_process(stimulus_proc)
-    with sim.write_vcd("test.vcd", "test.gtkw"):
-        sim.run_until(3/60)
-

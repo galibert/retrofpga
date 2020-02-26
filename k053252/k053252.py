@@ -9,31 +9,41 @@ class smode(IntEnum):
 
 class k053252(Elaboratable):
     def __init__(self):
-        self.i_ab   = Signal(4)
-        self.i_db   = Signal(8)
-        self.i_ccs  = Signal()
-        self.i_rw   = Signal()
+        self.i_clkp  = Signal()
+        
+        self.i_ab    = Signal(4)
+        self.i_db    = Signal(8)
+        self.i_ccs   = Signal()
+        self.i_rw    = Signal()
 
-        self.o_db   = Signal(8)
-        self.o_ncsy = Signal()
-        self.o_ncbk = Signal()
-        self.o_nhsy = Signal()
-        self.o_nhbk = Signal()
-        self.o_nvsy = Signal()
-        self.o_nvbk = Signal()
-        self.o_int1 = Signal(1, reset=1)
-        self.o_int2 = Signal(1, reset=1)
-        self.o_fcnt = Signal()
-        self.o_clk2 = Signal(1, reset=0)
+        self.o_db    = Signal(8)
+        self.o_ncsy  = Signal()
+        self.o_ncbk  = Signal()
+        self.o_nhsy  = Signal()
+        self.o_nhbk  = Signal()
+        self.o_nvsy  = Signal()
+        self.o_nvbk  = Signal()
+        self.o_int1  = Signal()
+        self.o_int2  = Signal()
+        self.o_fcnt  = Signal()
 
-        self.hc       = Signal(10, reset = 0x180)
-        self.hfp      = Signal( 9, reset = 0x022)
-        self.hbp      = Signal( 9, reset = 0x00d)
-        self.vc       = Signal( 9, reset = 0x108)
-        self.vfp      = Signal( 8, reset =  0x10)
-        self.vbp      = Signal( 8, reset =  0x10)
-        self.vsw      = Signal( 4, reset =   0x8)
-        self.hsw      = Signal( 4, reset =   0x4)
+        self.o_clk1p = Signal()
+        self.o_clk1n = Signal()
+        self.o_clk2p = Signal()
+        self.o_clk2n = Signal()
+        self.o_clk3p = Signal()
+        self.o_clk3n = Signal()
+        self.o_clk4p = Signal()
+        self.o_clk4n = Signal()
+
+        self.hc       = Signal(10, reset = 0x17f)
+        self.hfp      = Signal( 9, reset = 0x010)
+        self.hbp      = Signal( 9, reset = 0x030)
+        self.vc       = Signal( 9, reset = 0x107)
+        self.vfp      = Signal( 8, reset =  0x11)
+        self.vbp      = Signal( 8, reset =  0x0e)
+        self.vsw      = Signal( 4, reset =   0x7)
+        self.hsw      = Signal( 4, reset =   0x3)
         self.int_time = Signal( 8, reset =  0xff)
         self.hct      = Signal(10, reset = 0x000)
         self.hctf     = Signal( 9, reset = 0x001)
@@ -42,6 +52,7 @@ class k053252(Elaboratable):
         self.hm       = Signal(smode, reset = smode.front)
         self.vm       = Signal(smode, reset = smode.front)
         self.fc       = Signal(2, reset = 0)
+        self.clki     = Signal(3, reset = 0)
 
     def elaborate(self, platform):
         m = Module()
@@ -53,17 +64,25 @@ class k053252(Elaboratable):
         m.d.comb += self.o_nhbk.eq(self.hm == smode.vis)
         m.d.comb += self.o_nvbk.eq(self.vm == smode.vis)
         m.d.comb += self.o_fcnt.eq(self.fc[1])
+        m.d.comb += self.o_clk1p.eq(self.clki[:1] == 0)
+        m.d.comb += self.o_clk1n.eq(self.clki[:1] == 1)
+        m.d.comb += self.o_clk2p.eq(self.clki[:2] == 0)
+        m.d.comb += self.o_clk2n.eq(self.clki[:2] == 2)
+        m.d.comb += self.o_clk3p.eq(1)
+        m.d.comb += self.o_clk3n.eq(0)
+        m.d.comb += self.o_clk4p.eq(self.clki[:2] == 1)
+        m.d.comb += self.o_clk4n.eq(self.clki[:2] == 3)
 
-        hend  = Signal()
-        vend  = Signal()
-        hstep = Signal()
-        vstep = Signal()
-        m.d.comb += hend.eq(self.hct == self.hc)
-        m.d.comb += vend.eq(self.vct == self.vc)
+        with m.If(self.i_clkp):
+            m.d.sync += self.clki.eq(self.clki + 1)
 
-        m.d.sync += self.o_clk2.eq(~self.o_clk2)
-
-        with m.If(self.o_clk2):
+        with m.If(self.o_clk2p):
+            hend  = Signal()
+            vend  = Signal()
+            hstep = Signal()
+            vstep = Signal()
+            m.d.comb += hend.eq(self.hct == self.hc)
+            m.d.comb += vend.eq(self.vct == self.vc)
             with m.Switch(self.hm):
                 with m.Case(smode.front):
                     m.d.comb += hstep.eq(self.hctf == self.hfp)
@@ -118,6 +137,7 @@ class k053252(Elaboratable):
                 m.d.sync += self.hct.eq(self.hct + 1)
                 m.d.sync += self.hctf.eq(self.hctf + 1)
 
+        with m.Elif(self.o_clk2n):
             with m.If(self.i_ccs == 0):
                 with m.If(self.i_rw):
                     with m.If(self.i_ab == 0xe):
