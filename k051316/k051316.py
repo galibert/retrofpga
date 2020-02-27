@@ -2,10 +2,10 @@ from nmigen import *
 
 class k051316(Elaboratable):
     def __init__(self):
-        self.i_m12p  = Signal()
-        self.i_m12n  = Signal()
-        self.i_m6p  = Signal()
-        self.i_m6n  = Signal()
+        self.i_p12m  = Signal()
+        self.i_n12m  = Signal()
+        self.i_p6m  = Signal()
+        self.i_n6m  = Signal()
 
         self.i_ab = Signal(11)
         self.i_db = Signal(8)
@@ -50,8 +50,8 @@ class k051316(Elaboratable):
 
     def elaborate(self, platform):
         m = Module()
-        rdportl = self.vraml.read_port(domain = 'sync')
-        rdporth = self.vramh.read_port(domain = 'sync')
+        rdportl = self.vraml.read_port()
+        rdporth = self.vramh.read_port()
         wrportl = self.vraml.write_port(domain = 'sync')
         wrporth = self.vramh.write_port(domain = 'sync')
 
@@ -62,9 +62,65 @@ class k051316(Elaboratable):
         m.d.comb += self.o_rdata[:8].eq(rdportl.data)
         m.d.comb += self.o_rdata[8:].eq(rdporth.data)
 
+        # vram write
+        with m.If(self.i_n6m):
+            with m.If(~self.i_vrcs & ~self.i_rw):
+                with m.If(self.i_ab[10]):
+                    m.d.comb += [ wrporth.data.eq(self.i_db), wrporth.addr.eq(self.i_ab[:10]), wrporth.en.eq(1) ]
+                with m.Else():
+                    m.d.comb += [ wrportl.data.eq(self.i_db), wrportl.addr.eq(self.i_ab[:10]), wrportl.en.eq(1) ]
+        with m.Else():
+            m.d.comb += [ wrporth.en.eq(0), wrportl.en.eq(0) ]
+
+        # vram read
+        with m.If(~self.i_vrcs & self.i_rw):
+            with m.If(self.i_n6m):
+                with m.If(self.i_ab[10]):
+                    m.d.comb += rdporth.addr.eq(self.i_ab[:10])
+                    m.d.sync += self.o_db.eq(rdporth.data)
+                with m.Else():
+                    m.d.comb += rdportl.addr.eq(0xcb) #self.i_ab[:10])
+                    m.d.sync += self.o_db.eq(rdportl.data)
+        with m.Else():
+            m.d.sync += self.o_db.eq(0xff)
+
+        # register write
+        with m.If(self.i_n6m):
+            with m.If(self.i_iocs & (self.i_rw == 0)):
+                 with m.Switch(self.i_ab):
+                     with m.Case(0x0):
+                         m.d.sync += self.start_x[8:].eq(self.i_db)
+                     with m.Case(0x1):
+                         m.d.sync += self.start_x[:8].eq(self.i_db)
+                     with m.Case(0x2):
+                         m.d.sync += self.incxx[8:].eq(self.i_db)
+                     with m.Case(0x3):
+                         m.d.sync += self.incxx[:8].eq(self.i_db)
+                     with m.Case(0x4):
+                         m.d.sync += self.incyx[8:].eq(self.i_db)
+                     with m.Case(0x5):
+                         m.d.sync += self.incyx[:8].eq(self.i_db)
+                     with m.Case(0x6):
+                         m.d.sync += self.start_y[8:].eq(self.i_db)
+                     with m.Case(0x7):
+                         m.d.sync += self.start_y[:8].eq(self.i_db)
+                     with m.Case(0x8):
+                         m.d.sync += self.incxy[8:].eq(self.i_db)
+                     with m.Case(0x9):
+                         m.d.sync += self.incxy[:8].eq(self.i_db)
+                     with m.Case(0xa):
+                         m.d.sync += self.incyy[8:].eq(self.i_db)
+                     with m.Case(0xb):
+                         m.d.sync += self.incyy[:8].eq(self.i_db)
+                     with m.Case(0xc):
+                         m.d.sync += self.rombase[8:].eq(self.i_db)
+                     with m.Case(0xd):
+                         m.d.sync += self.rombase[:8].eq(self.i_db)
+                     with m.Case(0xe):
+                         m.d.sync += self.mode.eq(self.i_db)
         return m
         
-#         with m.If(self.i_m12p):
+#         with m.If(self.i_p12m):
 #             m.d.sync += self.pnhsy.eq(self.i_nhsy)
 #             m.d.sync += self.pnhbk.eq(self.i_nhbk)
 
@@ -135,7 +191,7 @@ class k051316(Elaboratable):
 #                     with m.Case(0xe):
 #                         m.d.sync += self.mode.eq(self.i_db)
 
-#         with m.Elif(self.i_m12n):
+#         with m.Elif(self.i_n12m):
 #             vramadr = Signal(10)
 #             m.d.comb += vramadr[:5].eq(self.xcp[15:20])
 #             m.d.comb += vramadr[5:].eq(self.ycp[15:20])

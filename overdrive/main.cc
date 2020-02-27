@@ -64,8 +64,6 @@ u16 *palette;
 u8 *roz_1_ram;
 u8 *roz_2_ram;
 
-u16 vram[0x20*0x20];
-
 constexpr int SX = 3*3;
 constexpr int SY = (264*2+1)*9*3;
 constexpr int SY1 = (264*2+1)*3*3;
@@ -194,7 +192,7 @@ int n6tick = 0;
 
 void show(const char *mark = "")
 {
-  printf("%6d: %c%c %c%c %c%c %c%c%c%c  psac1cs=%d psac1csd1=%d psac1csd2=%d pset1=%d pcs1=%d as=%d rw=%d dtack=%d data=%04x %s\n",
+  printf("%6d: %c%c %c%c %c%c %c%c%c%c  psac1cs=%d psac1csd1=%d psac1csd2=%d pset1=%d pcs1=%d as=%d a=%06x rw=%d dtack=%d datai=%04x datao=%04x %s\n",
 	 p24tick,
 	 R(p_o__p12m) ? '#' : '-',
 	 R(p_o__n12m) ? '#' : '-',
@@ -213,9 +211,11 @@ void show(const char *mark = "")
 	 R(p_o__pset1),
 	 R(p_o__pcs1),
 	 R(p_i__as1),
+	 R(p_i__ab1) << 1,
 	 R(p_i__rw1),
 	 R(p_o__dtack1),
 	 R(p_i__db1),
+	 R(p_o__db1),
 	 mark);
 }
 
@@ -465,7 +465,7 @@ void run_design()
     for(int y = 0; y != 384; y++) {
       do {
 
-	printf("%03d.%03d.%d%d.%d%d.%d%d%d%d: ca=%06x xcp=%06x ycp=%06x vramadr=%03x data=%04x col=%02x\n", x, y,
+	printf("%03d.%03d.%d%d.%d%d.%d%d%d%d: ca=%06x xcp=%06x ycp=%06x vramadr=%03x datai=%04x datao=%04x col=%02x\n", x, y,
 	       R(p_o__clk1p),
 	       R(p_o__clk1n),
 	       R(p_o__clk2p),
@@ -494,12 +494,6 @@ void run_design()
       bcol |= (r << 19) | ((r & 0x1c) << 14);
       bcol |= (g << 11) | ((g & 0x1c) <<  6);
       bcol |= (b <<  3) | ((b & 0x1c) >>  2);
-
-      //      bcol = 0;
-      //      u16 vr = vram[c];
-      //      printf("%03x\n", c);
-      //      bcol = (inv<8>(vr >> 8) << 16) | (inv<8>(vr) << 8);
-
 
       if(0) {
 	if(v == 0x12)
@@ -639,10 +633,6 @@ int main(int argc, char **argv)
 
   sprintf(path, "captures/%s_%d_roz_2.bin", selname, selid);
   roz_2_ram = static_cast<u8 *>(file_load(path));
-
-  u8 *vr = static_cast<u8 *>(file_load("captures/first_1_roz_1.bin"));
-  for(int i=0; i<0x20*0x20; i++)
-    vram[i] = vr[2*i] | (vr[2*i+0x800] << 8);
 
   run_design();
   run_trace();

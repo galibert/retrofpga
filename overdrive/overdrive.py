@@ -215,12 +215,14 @@ class overdrive(Elaboratable):
         
         # ROZ1 hookup including rom
         m.d.comb += self.m_roz_1.i_vrcs.eq(pcs1)
-        m.d.comb += self.m_roz_1.i_m12p.eq(self.m_timings.o_clk1n)
-        m.d.comb += self.m_roz_1.i_m12n.eq(self.m_timings.o_clk1p)
-        m.d.comb += self.m_roz_1.i_m6p.eq(self.m_timings.o_clk2n)
-        m.d.comb += self.m_roz_1.i_m6n.eq(self.m_timings.o_clk2p)
+        m.d.comb += self.m_roz_1.i_p12m.eq(self.m_timings.o_clk1n)
+        m.d.comb += self.m_roz_1.i_n12m.eq(self.m_timings.o_clk1p)
+        m.d.comb += self.m_roz_1.i_p6m.eq(self.m_timings.o_clk2n)
+        m.d.comb += self.m_roz_1.i_n6m.eq(self.m_timings.o_clk2p)
         with m.If(self.m_timings.o_clk2n):
             m.d.sync += self.m_roz_1.i_ab.eq(self.i_ab1[:11])
+        m.d.comb += self.m_roz_1.i_db.eq(self.i_db1[8:])
+        m.d.comb += self.m_roz_1.i_rw.eq(self.i_rw1)
         with m.If(self.m_timings.o_clk2p):
             m.d.sync += self.m_roz_1.i_nhsy.eq(self.m_timings.o_nhsy)
             m.d.sync += self.m_roz_1.i_nhbk.eq(self.m_timings.o_nhbk)
@@ -237,12 +239,14 @@ class overdrive(Elaboratable):
 
         # ROZ2 hookup including rom
         m.d.comb += self.m_roz_2.i_vrcs.eq(pcs2)
-        m.d.comb += self.m_roz_2.i_m12p.eq(self.m_timings.o_clk1n)
-        m.d.comb += self.m_roz_2.i_m12n.eq(self.m_timings.o_clk1p)
-        m.d.comb += self.m_roz_2.i_m6p.eq(self.m_timings.o_clk2n)
-        m.d.comb += self.m_roz_2.i_m6n.eq(self.m_timings.o_clk2p)
+        m.d.comb += self.m_roz_2.i_p12m.eq(self.m_timings.o_clk1n)
+        m.d.comb += self.m_roz_2.i_n12m.eq(self.m_timings.o_clk1p)
+        m.d.comb += self.m_roz_2.i_p6m.eq(self.m_timings.o_clk2n)
+        m.d.comb += self.m_roz_2.i_n6m.eq(self.m_timings.o_clk2p)
         with m.If(self.m_timings.o_clk2n):
             m.d.sync += self.m_roz_2.i_ab.eq(self.i_ab1[:11])
+        m.d.comb += self.m_roz_2.i_db.eq(self.i_db1[8:])
+        m.d.comb += self.m_roz_2.i_rw.eq(self.i_rw1)
         with m.If(self.m_timings.o_clk2p):
             m.d.sync += self.m_roz_2.i_nhsy.eq(self.m_timings.o_nhsy)
             m.d.sync += self.m_roz_2.i_nhbk.eq(self.m_timings.o_nhbk)
@@ -257,12 +261,6 @@ class overdrive(Elaboratable):
             m.d.comb += self.o_ci3[:4].eq(roz2rd.data[4:])
         m.d.comb += self.o_ci3[4:].eq(self.m_roz_2.o_ca[18:22])
 
-        m.d.comb += self.m_roz_1.i_iocs.eq(1)
-        m.d.comb += self.m_roz_1.i_db.eq(0)
-        m.d.comb += self.m_roz_1.i_rw.eq(self.i_rw1)
 
-        m.d.comb += self.m_roz_2.i_iocs.eq(1)
-        m.d.comb += self.m_roz_2.i_db.eq(self.i_ab1[:11])
-        m.d.comb += self.m_roz_2.i_rw.eq(self.i_rw1)
         
         return m
