@@ -12,6 +12,7 @@
 #include <zlib.h>
 
 #include <functional>
+#include <vector>
 
 typedef   signed char  s8;
 typedef unsigned char  u8;
@@ -202,16 +203,14 @@ int n6tick = 0;
 
 void rozshow(int x, int y)
 {
-  printf("%03d.%03d.%d%d%d%d.%d%d: ca=%06x.%d xcp=%06x ycp=%06x vramadr=%03x.%d sx=%04x incxx=%04x rdata = %04x col=%02x\n", x, y,
+  printf("%03d.%03d.%d%d%d%d.%d%d: col=%03x\n", x, y,
 	 R(p_o__nvsy),
 	 R(p_o__nvbk),
 	 R(p_o__nhsy),
 	 R(p_o__nhbk),
 	 R(p_o__p6m),
 	 R(p_o__n6m),
-	 R(p_o__ca), R(p_o__oblk), R(p_o__xcp), R(p_o__ycp), R(p_o__vramadr), R(p_o__vramen),
-	 R(p_o__start__x), R(p_o__incxx),
-	 R(p_o__rdata), R(p_o__ci3));
+	 R(p_o__c0));
 }
 
 
@@ -219,7 +218,7 @@ void show(const char *mark = "")
 {
   rozshow(0,0);
 
-  printf("%6d: %c%c %c%c %c%c %c%c%c%c  psac1cs=%d psac1csd1=%d psac1csd2=%d pset1=%d pcs1=%d as=%d%d%d a=%06x rw=%d dtack=%d datai=%04x datao=%04x %s\n",
+  printf("%6d: %c%c %c%c %c%c %c%c%c%c  as=%d%d%d a=%06x rw=%d dtack=%d datai=%04x datao=%04x %s\n",
 	 p24tick,
 	 R(p_o__p12m) ? '#' : '-',
 	 R(p_o__n12m) ? '#' : '-',
@@ -232,11 +231,6 @@ void show(const char *mark = "")
 	 R(p_o__nhbk) ? '-' : 'h',
 	 R(p_o__nhsy) ? '-' : 'H',
 
-	 R(p_o__psac1cs),
-	 R(p_o__psac1csd1),
-	 R(p_o__psac1csd2),
-	 R(p_o__pset1),
-	 R(p_o__pcs1),
 	 R(p_i__as1),
 	 R(p_i__uds1),
 	 R(p_i__lds1),
@@ -482,11 +476,8 @@ void run_design()
   for(int x = 263; x >= 0; x--) {
     for(int y = 0; y != 384; y++) {
 
-      u32 v = R(p_o__ci3) | 0x700;
-      if(!(v & 15))
-	v = R(p_o__ci4) | 0x600;
+      u32 v = R(p_o__c0);
       u16 c = palette[v];
-      //      c = R(p_o__vramadr);
 
       u8 r = c & 31;
       u8 g = (c >> 5) & 31;
@@ -520,11 +511,9 @@ void run_design()
 	  bcol |= 0xff0000;
       }
 
-      unsigned int ccol = 0;
-      if(!R(p_o__nvsy))
-	ccol |= 0x00ffff;
-      if(!R(p_o__nhsy))
-	ccol |= 0xff0000;
+      auto p1 = image + y*SY + x*SX + (264+1)*SX;
+
+      unsigned int ccol = (p1[0] << 16) | (p1[1] << 8) | p1[2];
 
       auto p = image + y*SY + x*SX;
       p[0] = bcol >> 16; p[1] = bcol >> 8; p[2] = bcol;
@@ -672,8 +661,8 @@ int main(int argc, char **argv)
   fclose(rfd);
 
 
-  run_design();
   run_trace();
+  run_design();
 
   char pngname[256];
   sprintf(pngname, "%s_%d.png", selname, selid);

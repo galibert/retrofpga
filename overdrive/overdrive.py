@@ -3,6 +3,7 @@ sys.path.append('..')
 
 from k053252 import k053252
 from k051316 import k051316
+from k053251 import k053251
 from nmigen import *
 
 def rom_load_bytes(fname):
@@ -30,30 +31,12 @@ class overdrive(Elaboratable):
         self.i_rw1    = Signal()
         self.o_dtack1 = Signal()
 
-        self.o_pset1  = Signal()
-        self.o_pcs1  = Signal()
-        self.o_psac1cs = Signal()
-        self.o_psac1csd1 = Signal()
-        self.o_psac1csd2 = Signal()
-
         self.o_nhsy = Signal()
         self.o_nhbk = Signal()
         self.o_nvsy = Signal()
         self.o_nvbk = Signal()
+        self.o_c0   = Signal(11)
 
-        self.o_ci3 = Signal(8)
-        self.o_ci4 = Signal(8)
-
-        self.o_ca  = Signal(24)
-        self.o_xcp = Signal(24)
-        self.o_ycp = Signal(24)
-        self.o_vramadr = Signal(10)
-        self.o_rdata = Signal(16)
-        self.o_vramen = Signal()
-        self.o_start_x = Signal(16)
-        self.o_incxx = Signal(16)
-        self.o_iocs = Signal()
-        self.o_oblk = Signal()
         self.o_p12m = Signal()
         self.o_n12m = Signal()
         self.o_p6m  = Signal()
@@ -66,20 +49,11 @@ class overdrive(Elaboratable):
         m.submodules.timings = timings = k053252.k053252()
         m.submodules.roz_1   = roz_1   = k051316.k051316()
         m.submodules.roz_2   = roz_2   = k051316.k051316()
+        m.submodules.mixer   = mixer   = k053251.k053251()
 
         m.submodules.roz1rd = roz1rd = Memory(width = 8, depth = 0x20000, init = rom_load_bytes("roms/789e06.a21")).read_port()
         m.submodules.roz2rd = roz2rd = Memory(width = 8, depth = 0x20000, init = rom_load_bytes("roms/789e07.c23")).read_port()
 
-        # Debug hookups
-        m.d.comb += self.o_ca.eq(roz_2.o_ca)
-        m.d.comb += self.o_xcp.eq(roz_2.o_xcp)
-        m.d.comb += self.o_ycp.eq(roz_2.o_ycp)
-        m.d.comb += self.o_vramadr.eq(roz_2.o_vramadr)
-        m.d.comb += self.o_rdata.eq(roz_2.o_rdata)
-        m.d.comb += self.o_vramen.eq(roz_2.o_vramen)
-        m.d.comb += self.o_start_x.eq(roz_2.o_start_x)
-        m.d.comb += self.o_incxx.eq(roz_2.o_incxx)
-        
         # Address decoder 1
         rom1cs   = Signal()
         ram1cs   = Signal()
@@ -193,7 +167,6 @@ class overdrive(Elaboratable):
             m.d.sync += psac2csd2.eq(psac2csd1)
             m.d.sync += pset2.eq(psacset2)
 
-        m.d.comb += [self.o_psac1cs.eq(psac1cs), self.o_psac1csd1.eq(psac1csd1), self.o_psac1csd2.eq(psac1csd2)]
         m.d.comb += pcs1.eq(~((~psac1csd1) & (self.i_rw1 | psac1csd2)))
         m.d.comb += pcs2.eq(~((~psac2csd1) & (self.i_rw1 | psac2csd2)))
 
@@ -203,9 +176,6 @@ class overdrive(Elaboratable):
         with m.Elif(timings.o_clk2n):
             m.d.sync += psacchad1.eq(~(psaccha1 & psaccha2))
             m.d.sync += psacdtk.eq(psacchad1 & psac1csd1 & psac1csd1)
-
-        m.d.comb += self.o_pset1.eq(pset1)
-        m.d.comb += self.o_pcs1.eq(pcs1)
         
         # ROZ1 hookup including rom
         m.d.comb += roz_1.i_vrcs.eq(pcs1)
@@ -225,12 +195,12 @@ class overdrive(Elaboratable):
             m.d.sync += roz_1.i_nvbk.eq(timings.o_nvbk)
         m.d.comb += roz1rd.addr.eq(roz_1.o_ca[1:18])
         with m.If(roz_1.o_oblk):
-            m.d.comb += self.o_ci4[:4].eq(0)
+            m.d.comb += mixer.i_ci4[:4].eq(0)
         with m.Elif(roz_1.o_ca[0]):
-            m.d.comb += self.o_ci4[:4].eq(roz1rd.data[4:])
+            m.d.comb += mixer.i_ci4[:4].eq(roz1rd.data[4:])
         with m.Else():
-            m.d.comb += self.o_ci4[:4].eq(roz1rd.data[:4])
-        m.d.comb += self.o_ci4[4:].eq(roz_1.o_ca[18:22])
+            m.d.comb += mixer.i_ci4[:4].eq(roz1rd.data[:4])
+        m.d.comb += mixer.i_ci4[4:].eq(roz_1.o_ca[18:22])
 
         # ROZ2 hookup including rom
         m.d.comb += roz_2.i_vrcs.eq(pcs2)
@@ -250,13 +220,26 @@ class overdrive(Elaboratable):
             m.d.sync += roz_2.i_nvbk.eq(timings.o_nvbk)
         m.d.comb += roz2rd.addr.eq(roz_2.o_ca[1:18])
         with m.If(roz_2.o_oblk):
-            m.d.comb += self.o_ci3[:4].eq(0)
+            m.d.comb += mixer.i_ci3[:4].eq(0)
         with m.Elif(roz_2.o_ca[0]):
-            m.d.comb += self.o_ci3[:4].eq(roz2rd.data[:4])
+            m.d.comb += mixer.i_ci3[:4].eq(roz2rd.data[:4])
         with m.Else():
-            m.d.comb += self.o_ci3[:4].eq(roz2rd.data[4:])
-        m.d.comb += self.o_ci3[4:].eq(roz_2.o_ca[18:22])
-        m.d.comb += self.o_oblk.eq(roz_2.o_oblk)
+            m.d.comb += mixer.i_ci3[:4].eq(roz2rd.data[4:])
+        m.d.comb += mixer.i_ci3[4:].eq(roz_2.o_ca[18:22])
 
-        
+        # Mixer hookup
+        m.d.comb += mixer.i_pclk.eq(timings.o_clk2p)
+        m.d.comb += mixer.i_cs.eq(pcucs)
+        m.d.comb += mixer.i_ab.eq(self.i_ab1[:4])
+        m.d.comb += mixer.i_db.eq(self.i_db1[8:14])
+        m.d.comb += mixer.i_sdi[1].eq(0)
+        m.d.comb += mixer.i_sdi[0].eq(0)
+        m.d.comb += mixer.i_pr0.eq(0x3f)
+        m.d.comb += mixer.i_pr1.eq(0x3f)
+        m.d.comb += mixer.i_pr2.eq(0x3f)
+        m.d.comb += mixer.i_ci0.eq(0)
+        m.d.comb += mixer.i_ci1.eq(0)
+        m.d.comb += mixer.i_ci2.eq(0)
+        m.d.comb += self.o_c0.eq(mixer.o_c0)
+
         return m

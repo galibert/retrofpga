@@ -143,10 +143,10 @@ class k051316(Elaboratable):
                  m.d.sync += self.pnvsy.eq(self.i_nvsy)
                  m.d.sync += self.pnvbk.eq(self.i_nvbk)
                  with m.If((~self.pnvbk) & self.i_nvbk):
-                     m.d.comb += cx[8:].eq(self.start_x)
-                     m.d.comb += cy[8:].eq(self.start_y)
-                     m.d.comb += cx[:8].eq(0)
-                     m.d.comb += cy[:8].eq(0)
+                     m.d.comb += cx[8:].eq(self.start_x + self.incxx[8:])
+                     m.d.comb += cy[8:].eq(self.start_y + self.incxy[8:])
+                     m.d.comb += cx[:8].eq(self.incxx[:8])
+                     m.d.comb += cy[:8].eq(self.incxy[:8])
                      m.d.sync += self.xbp.eq(cx)
                      m.d.sync += self.ybp.eq(cy)
                  with m.Else():
