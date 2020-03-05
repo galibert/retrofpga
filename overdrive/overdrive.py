@@ -49,6 +49,11 @@ class overdrive(Elaboratable):
         self.o_ycp = Signal(24)
         self.o_vramadr = Signal(10)
         self.o_rdata = Signal(16)
+        self.o_vramen = Signal()
+        self.o_start_x = Signal(16)
+        self.o_incxx = Signal(16)
+        self.o_iocs = Signal()
+        self.o_oblk = Signal()
         self.o_p12m = Signal()
         self.o_n12m = Signal()
         self.o_p6m  = Signal()
@@ -56,36 +61,25 @@ class overdrive(Elaboratable):
         self.o_p6md = Signal()
         self.o_n6md = Signal()
 
-        self.m_timings = k053252.k053252()
-#        self.m_roz_1   = k051316.k051316('captures/first_1_roz_1.bin', [ 0, 0x800, 0, 0, 0, 0x800, 0, 7 ])
-#        self.m_roz_2   = k051316.k051316('captures/first_1_roz_2.bin', [ 0xb40, 0, -0xa00, -0x157, 0x9fe, 0, 0, 3 ])
-        self.m_roz_1   = k051316.k051316()
-        self.m_roz_2   = k051316.k051316()
-
-        roz1r = rom_load_bytes("roms/789e06.a21")
-        self.roz1_rom = Memory(width = 8, depth = 0x20000, init = roz1r)
-
-        roz2r = rom_load_bytes("roms/789e07.c23")
-        self.roz2_rom = Memory(width = 8, depth = 0x20000, init = roz2r)
-
-        
-
     def elaborate(self, platform):
         m = Module()
-        m.submodules += self.m_timings
-        m.submodules += self.m_roz_1
-        m.submodules += self.m_roz_2
-        roz1rd = self.roz1_rom.read_port()
-        roz2rd = self.roz2_rom.read_port()
-        m.submodules += [roz1rd, roz2rd]
+        m.submodules.timings = timings = k053252.k053252()
+        m.submodules.roz_1   = roz_1   = k051316.k051316()
+        m.submodules.roz_2   = roz_2   = k051316.k051316()
+
+        m.submodules.roz1rd = roz1rd = Memory(width = 8, depth = 0x20000, init = rom_load_bytes("roms/789e06.a21")).read_port()
+        m.submodules.roz2rd = roz2rd = Memory(width = 8, depth = 0x20000, init = rom_load_bytes("roms/789e07.c23")).read_port()
 
         # Debug hookups
-        m.d.comb += self.o_ca.eq(self.m_roz_2.o_ca)
-        m.d.comb += self.o_xcp.eq(self.m_roz_2.o_xcp)
-        m.d.comb += self.o_ycp.eq(self.m_roz_2.o_ycp)
-        m.d.comb += self.o_vramadr.eq(self.m_roz_2.o_vramadr)
-        m.d.comb += self.o_rdata.eq(self.m_roz_2.o_rdata)
-
+        m.d.comb += self.o_ca.eq(roz_2.o_ca)
+        m.d.comb += self.o_xcp.eq(roz_2.o_xcp)
+        m.d.comb += self.o_ycp.eq(roz_2.o_ycp)
+        m.d.comb += self.o_vramadr.eq(roz_2.o_vramadr)
+        m.d.comb += self.o_rdata.eq(roz_2.o_rdata)
+        m.d.comb += self.o_vramen.eq(roz_2.o_vramen)
+        m.d.comb += self.o_start_x.eq(roz_2.o_start_x)
+        m.d.comb += self.o_incxx.eq(roz_2.o_incxx)
+        
         # Address decoder 1
         rom1cs   = Signal()
         ram1cs   = Signal()
@@ -145,26 +139,26 @@ class overdrive(Elaboratable):
         m.d.comb += self.o_dtack1.eq(hcomdtk & hostint1 & hostint2 & psacdtk & (self.i_as1 | self.i_ab1[21-1]))
 
         # data bus collection 1
-        m.d.comb += self.o_db1[0:8].eq(self.m_timings.o_db)
-        m.d.comb += self.o_db1[8:16].eq(self.m_roz_1.o_db & self.m_roz_2.o_db)
+        m.d.comb += self.o_db1[0:8].eq(timings.o_db)
+        m.d.comb += self.o_db1[8:16].eq(roz_1.o_db & roz_2.o_db)
 
 
         # Timings hookup
-        m.d.comb += self.m_timings.i_ab.eq(self.i_ab1[:4])
-        m.d.comb += self.m_timings.i_db.eq(self.i_db1[0:8])
-        m.d.comb += self.m_timings.i_rw.eq(self.i_rw1)
-        m.d.comb += self.m_timings.i_ccs.eq(ccucs)
-        m.d.comb += self.m_timings.i_clkp.eq(1)
-        m.d.comb += self.o_nhsy.eq(self.m_timings.o_nhsy)
-        m.d.comb += self.o_nvsy.eq(self.m_timings.o_nvsy)
-        m.d.comb += self.o_nhbk.eq(self.m_timings.o_nhbk)
-        m.d.comb += self.o_nvbk.eq(self.m_timings.o_nvbk)
-        m.d.comb += self.o_p12m.eq(self.m_timings.o_clk1p)
-        m.d.comb += self.o_n12m.eq(self.m_timings.o_clk1n)
-        m.d.comb += self.o_p6m.eq (self.m_timings.o_clk2p)
-        m.d.comb += self.o_n6m.eq (self.m_timings.o_clk2n)
-        m.d.comb += self.o_p6md.eq(self.m_timings.o_clk4p)
-        m.d.comb += self.o_n6md.eq(self.m_timings.o_clk4n)
+        m.d.comb += timings.i_ab.eq(self.i_ab1[:4])
+        m.d.comb += timings.i_db.eq(self.i_db1[0:8])
+        m.d.comb += timings.i_rw.eq(self.i_rw1)
+        m.d.comb += timings.i_ccs.eq(ccucs)
+        m.d.comb += timings.i_clkp.eq(1)
+        m.d.comb += self.o_nhsy.eq(timings.o_nhsy)
+        m.d.comb += self.o_nvsy.eq(timings.o_nvsy)
+        m.d.comb += self.o_nhbk.eq(timings.o_nhbk)
+        m.d.comb += self.o_nvbk.eq(timings.o_nvbk)
+        m.d.comb += self.o_p12m.eq(timings.o_clk1p)
+        m.d.comb += self.o_n12m.eq(timings.o_clk1n)
+        m.d.comb += self.o_p6m.eq (timings.o_clk2p)
+        m.d.comb += self.o_n6m.eq (timings.o_clk2n)
+        m.d.comb += self.o_p6md.eq(timings.o_clk4p)
+        m.d.comb += self.o_n6md.eq(timings.o_clk4n)
 
         # p12m = clk1p
         # n12m = clk1n
@@ -191,7 +185,7 @@ class overdrive(Elaboratable):
             m.d.sync += psac2csd1.eq(1)
             m.d.sync += psac2csd2.eq(1)
             m.d.sync += pset2.eq(1)
-        with m.Elif(self.m_timings.o_clk4n):
+        with m.Elif(timings.o_clk4n):
             m.d.sync += psac1csd1.eq(psac1cs)
             m.d.sync += psac1csd2.eq(psac1csd1)
             m.d.sync += pset1.eq(psacset1)
@@ -206,7 +200,7 @@ class overdrive(Elaboratable):
         with m.If(self.i_as1):
             m.d.sync += psacchad1.eq(1)
             m.d.sync += psacdtk.eq(1)
-        with m.Elif(self.m_timings.o_clk2n):
+        with m.Elif(timings.o_clk2n):
             m.d.sync += psacchad1.eq(~(psaccha1 & psaccha2))
             m.d.sync += psacdtk.eq(psacchad1 & psac1csd1 & psac1csd1)
 
@@ -214,53 +208,55 @@ class overdrive(Elaboratable):
         m.d.comb += self.o_pcs1.eq(pcs1)
         
         # ROZ1 hookup including rom
-        m.d.comb += self.m_roz_1.i_vrcs.eq(pcs1)
-        m.d.comb += self.m_roz_1.i_p12m.eq(self.m_timings.o_clk1n)
-        m.d.comb += self.m_roz_1.i_n12m.eq(self.m_timings.o_clk1p)
-        m.d.comb += self.m_roz_1.i_p6m.eq(self.m_timings.o_clk2n)
-        m.d.comb += self.m_roz_1.i_n6m.eq(self.m_timings.o_clk2p)
-        with m.If(self.m_timings.o_clk2n):
-            m.d.sync += self.m_roz_1.i_ab.eq(self.i_ab1[:11])
-        m.d.comb += self.m_roz_1.i_db.eq(self.i_db1[8:])
-        m.d.comb += self.m_roz_1.i_rw.eq(self.i_rw1)
-        with m.If(self.m_timings.o_clk2p):
-            m.d.sync += self.m_roz_1.i_nhsy.eq(self.m_timings.o_nhsy)
-            m.d.sync += self.m_roz_1.i_nhbk.eq(self.m_timings.o_nhbk)
-            m.d.sync += self.m_roz_1.i_nvsy.eq(self.m_timings.o_nvsy)
-            m.d.sync += self.m_roz_1.i_nvbk.eq(self.m_timings.o_nvbk)
-        m.d.comb += roz1rd.addr.eq(self.m_roz_1.o_ca[1:18])
-        with m.If(self.m_roz_1.o_oblk):
+        m.d.comb += roz_1.i_vrcs.eq(pcs1)
+        m.d.comb += roz_1.i_iocs.eq(pset1)
+        m.d.comb += roz_1.i_p12m.eq(timings.o_clk1n)
+        m.d.comb += roz_1.i_n12m.eq(timings.o_clk1p)
+        m.d.comb += roz_1.i_p6m.eq(timings.o_clk2n)
+        m.d.comb += roz_1.i_n6m.eq(timings.o_clk2p)
+        with m.If(timings.o_clk2n):
+            m.d.sync += roz_1.i_ab.eq(self.i_ab1[:11])
+        m.d.comb += roz_1.i_db.eq(self.i_db1[8:])
+        m.d.comb += roz_1.i_rw.eq(self.i_rw1)
+        with m.If(timings.o_clk2p):
+            m.d.sync += roz_1.i_nhsy.eq(timings.o_nhsy)
+            m.d.sync += roz_1.i_nhbk.eq(timings.o_nhbk)
+            m.d.sync += roz_1.i_nvsy.eq(timings.o_nvsy)
+            m.d.sync += roz_1.i_nvbk.eq(timings.o_nvbk)
+        m.d.comb += roz1rd.addr.eq(roz_1.o_ca[1:18])
+        with m.If(roz_1.o_oblk):
             m.d.comb += self.o_ci4[:4].eq(0)
-        with m.Elif(self.m_roz_1.o_ca[0]):
+        with m.Elif(roz_1.o_ca[0]):
             m.d.comb += self.o_ci4[:4].eq(roz1rd.data[4:])
         with m.Else():
             m.d.comb += self.o_ci4[:4].eq(roz1rd.data[:4])
-        m.d.comb += self.o_ci4[4:].eq(self.m_roz_1.o_ca[18:22])
+        m.d.comb += self.o_ci4[4:].eq(roz_1.o_ca[18:22])
 
         # ROZ2 hookup including rom
-        m.d.comb += self.m_roz_2.i_vrcs.eq(pcs2)
-        m.d.comb += self.m_roz_2.i_p12m.eq(self.m_timings.o_clk1n)
-        m.d.comb += self.m_roz_2.i_n12m.eq(self.m_timings.o_clk1p)
-        m.d.comb += self.m_roz_2.i_p6m.eq(self.m_timings.o_clk2n)
-        m.d.comb += self.m_roz_2.i_n6m.eq(self.m_timings.o_clk2p)
-        with m.If(self.m_timings.o_clk2n):
-            m.d.sync += self.m_roz_2.i_ab.eq(self.i_ab1[:11])
-        m.d.comb += self.m_roz_2.i_db.eq(self.i_db1[8:])
-        m.d.comb += self.m_roz_2.i_rw.eq(self.i_rw1)
-        with m.If(self.m_timings.o_clk2p):
-            m.d.sync += self.m_roz_2.i_nhsy.eq(self.m_timings.o_nhsy)
-            m.d.sync += self.m_roz_2.i_nhbk.eq(self.m_timings.o_nhbk)
-            m.d.sync += self.m_roz_2.i_nvsy.eq(self.m_timings.o_nvsy)
-            m.d.sync += self.m_roz_2.i_nvbk.eq(self.m_timings.o_nvbk)
-        m.d.comb += roz2rd.addr.eq(self.m_roz_2.o_ca[1:18])
-        with m.If(self.m_roz_2.o_oblk):
+        m.d.comb += roz_2.i_vrcs.eq(pcs2)
+        m.d.comb += roz_2.i_iocs.eq(pset2)
+        m.d.comb += roz_2.i_p12m.eq(timings.o_clk1n)
+        m.d.comb += roz_2.i_n12m.eq(timings.o_clk1p)
+        m.d.comb += roz_2.i_p6m.eq(timings.o_clk2n)
+        m.d.comb += roz_2.i_n6m.eq(timings.o_clk2p)
+        with m.If(timings.o_clk2n):
+            m.d.sync += roz_2.i_ab.eq(self.i_ab1[:11])
+        m.d.comb += roz_2.i_db.eq(self.i_db1[8:])
+        m.d.comb += roz_2.i_rw.eq(self.i_rw1)
+        with m.If(timings.o_clk2p):
+            m.d.sync += roz_2.i_nhsy.eq(timings.o_nhsy)
+            m.d.sync += roz_2.i_nhbk.eq(timings.o_nhbk)
+            m.d.sync += roz_2.i_nvsy.eq(timings.o_nvsy)
+            m.d.sync += roz_2.i_nvbk.eq(timings.o_nvbk)
+        m.d.comb += roz2rd.addr.eq(roz_2.o_ca[1:18])
+        with m.If(roz_2.o_oblk):
             m.d.comb += self.o_ci3[:4].eq(0)
-        with m.Elif(self.m_roz_2.o_ca[0]):
+        with m.Elif(roz_2.o_ca[0]):
             m.d.comb += self.o_ci3[:4].eq(roz2rd.data[:4])
         with m.Else():
             m.d.comb += self.o_ci3[:4].eq(roz2rd.data[4:])
-        m.d.comb += self.o_ci3[4:].eq(self.m_roz_2.o_ca[18:22])
-
+        m.d.comb += self.o_ci3[4:].eq(roz_2.o_ca[18:22])
+        m.d.comb += self.o_oblk.eq(roz_2.o_oblk)
 
         
         return m

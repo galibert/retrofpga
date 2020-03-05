@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <assert.h>
 #include "overdrive.cc"
 
 #include <stdlib.h>
@@ -60,9 +61,18 @@ typedef unsigned long  u64;
 //    // overdrive.posedge_p_clk = true;
 //    // overdrive.step();
 
+struct rwrite {
+  u32 adr;
+  u16 data;
+  u8 uds;
+  u8 lds;
+};
+
 u16 *palette;
 u8 *roz_1_ram;
 u8 *roz_2_ram;
+
+std::vector<rwrite> rwrites;
 
 constexpr int SX = 3*3;
 constexpr int SY = (264*2+1)*9*3;
@@ -190,9 +200,26 @@ int n6tick = 0;
 #define R(port) (overdrive.port.curr.data[0])
 #define W(port, bits, val) overdrive.port.next = value<bits>(val)
 
+void rozshow(int x, int y)
+{
+  printf("%03d.%03d.%d%d%d%d.%d%d: ca=%06x.%d xcp=%06x ycp=%06x vramadr=%03x.%d sx=%04x incxx=%04x rdata = %04x col=%02x\n", x, y,
+	 R(p_o__nvsy),
+	 R(p_o__nvbk),
+	 R(p_o__nhsy),
+	 R(p_o__nhbk),
+	 R(p_o__p6m),
+	 R(p_o__n6m),
+	 R(p_o__ca), R(p_o__oblk), R(p_o__xcp), R(p_o__ycp), R(p_o__vramadr), R(p_o__vramen),
+	 R(p_o__start__x), R(p_o__incxx),
+	 R(p_o__rdata), R(p_o__ci3));
+}
+
+
 void show(const char *mark = "")
 {
-  printf("%6d: %c%c %c%c %c%c %c%c%c%c  psac1cs=%d psac1csd1=%d psac1csd2=%d pset1=%d pcs1=%d as=%d a=%06x rw=%d dtack=%d datai=%04x datao=%04x %s\n",
+  rozshow(0,0);
+
+  printf("%6d: %c%c %c%c %c%c %c%c%c%c  psac1cs=%d psac1csd1=%d psac1csd2=%d pset1=%d pcs1=%d as=%d%d%d a=%06x rw=%d dtack=%d datai=%04x datao=%04x %s\n",
 	 p24tick,
 	 R(p_o__p12m) ? '#' : '-',
 	 R(p_o__n12m) ? '#' : '-',
@@ -211,6 +238,8 @@ void show(const char *mark = "")
 	 R(p_o__pset1),
 	 R(p_o__pcs1),
 	 R(p_i__as1),
+	 R(p_i__uds1),
+	 R(p_i__lds1),
 	 R(p_i__ab1) << 1,
 	 R(p_i__rw1),
 	 R(p_o__dtack1),
@@ -419,34 +448,20 @@ void run_design()
   for(int i=0; i<100; i++)
     tick();
 
-  m68000_1_w(wait_n12m, wait_p12m, 0x100000, 0x01, 0, 1);
-  m68000_1_w(wait_n12m, wait_p12m, 0x100002, 0x80, 0, 1);
-  m68000_1_w(wait_n12m, wait_p12m, 0x100004, 0x00, 0, 1);
-  m68000_1_w(wait_n12m, wait_p12m, 0x100006, 0x22, 0, 1);
-  m68000_1_w(wait_n12m, wait_p12m, 0x100008, 0x00, 0, 1);
-  m68000_1_w(wait_n12m, wait_p12m, 0x10000a, 0x0d, 0, 1);
-  m68000_1_w(wait_n12m, wait_p12m, 0x100010, 0x01, 0, 1);
-  m68000_1_w(wait_n12m, wait_p12m, 0x100012, 0x08, 0, 1);
-  m68000_1_w(wait_n12m, wait_p12m, 0x100014, 0x10, 0, 1);
-  m68000_1_w(wait_n12m, wait_p12m, 0x100016, 0x10, 0, 1);
-  m68000_1_w(wait_n12m, wait_p12m, 0x100018, 0x84, 0, 1);
+  for(const auto &e : rwrites)
+    m68000_1_w(wait_n12m, wait_p12m, e.adr, e.data, e.uds, e.lds, false);
 
-  for(u32 i=0; i<0x800; i++) {
-    m68000_1_w(wait_n12m, wait_p12m, 0x210000 + 2*i, roz_1_ram[2*i] << 8, 1, 0, true);
-    m68000_1_r(wait_n12m, wait_p12m, 0x210000 + 2*i, 1, 0, true);
-  }
+  for(u32 i=0; i<0x800; i++)
+    m68000_1_w(wait_n12m, wait_p12m, 0x210000 + 2*i, roz_1_ram[2*i] << 8, 1, 0, false);
+
+  for(u32 i=0; i<0x800; i++)
+    m68000_1_w(wait_n12m, wait_p12m, 0x218000 + 2*i, roz_2_ram[2*i] << 8, 1, 0, false);
 
   
-
-#if 0
-  //  overdrive.p_i__ccs.next = value<1>{1u};
-  //  overdrive.step();
-
   int prev = 0x1010;
 
   for(;;) {
-    // more compatible but slightly slower code: explicitly drive a clock signal
-
+    wait_p6m();
     int next =
       (R(p_o__nvsy) << 12) |
       (R(p_o__nvbk) << 8) |
@@ -461,21 +476,11 @@ void run_design()
 
   }
 
+  if(0)
+    rozshow(263, 0);
+
   for(int x = 263; x >= 0; x--) {
     for(int y = 0; y != 384; y++) {
-      do {
-
-	printf("%03d.%03d.%d%d.%d%d.%d%d%d%d: ca=%06x xcp=%06x ycp=%06x vramadr=%03x datai=%04x datao=%04x col=%02x\n", x, y,
-	       R(p_o__clk1p),
-	       R(p_o__clk1n),
-	       R(p_o__clk2p),
-	       R(p_o__clk2n),
-	       R(p_o__nvsy),
-	       R(p_o__nvbk),
-	       R(p_o__nhsy),
-	       R(p_o__nhbk),
-	       R(p_o__ca), R(p_o__xcp), R(p_o__ycp), R(p_o__vramadr), R(p_o__rdata), R(p_o__ci3));
-      } while(!overdrive.p_o__clk2p.curr.data[0]);
 
       u32 v = R(p_o__ci3) | 0x700;
       if(!(v & 15))
@@ -533,9 +538,19 @@ void run_design()
       p[0] = bcol >> 16; p[1] = bcol >> 8; p[2] = bcol;
       p[3] = bcol >> 16; p[4] = bcol >> 8; p[5] = bcol;
       p[6] = bcol >> 16; p[7] = bcol >> 8; p[8] = bcol;
+
+#if 0
+      do {
+	tick();
+	rozshow(x, y);
+      } while(!R(p_o__p6m));
+#else
+      wait_p6m();
+      if(0)
+	rozshow(x, y);
+#endif
     }
   }
-#endif
 }
 
 char *selname;
@@ -633,6 +648,29 @@ int main(int argc, char **argv)
 
   sprintf(path, "captures/%s_%d_roz_2.bin", selname, selid);
   roz_2_ram = static_cast<u8 *>(file_load(path));
+
+  char line[4096];
+
+  sprintf(path, "captures/%s_%d_regs.txt", selname, selid);
+  FILE *rfd = fopen(path, "r");
+  while(fgets(line, sizeof(line), rfd)) {
+    //      for(int i=0; line[i]; i++)
+    //	  printf("%03d: %02x %c\n", i, line[i], line[i]);
+    assert(line[6] == ' ');
+    line[6] = 0;
+    line[11] = 0;
+    u32 adr = strtol(line, nullptr, 16);
+    u16 v1 = strtol(line+7, nullptr, 16);
+    u8 v2 = strtol(line+9, nullptr, 16);
+    if(line[7] == '.')
+      rwrites.emplace_back(rwrite{ adr, v2, 0, 1 });
+    else if(line[9] == '.')
+      rwrites.emplace_back(rwrite{ adr, u16(v1 << 8), 1, 0 });
+    else
+      rwrites.emplace_back(rwrite{ adr, v1, 1, 1 });
+  }
+  fclose(rfd);
+
 
   run_design();
   run_trace();
