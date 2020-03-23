@@ -2,11 +2,11 @@ from nmigen import *
 
 class Firmware(Elaboratable):
     def __init__(self):
-        self.i_clka0  = Signal()
-        self.i_clka1  = Signal()
-        self.i_romadr = Signal(8)
-        self.o_romout = Signal(19)
-        self.mem      = Memory(width=19, depth=256, init=[
+        self.i_clka0   = Signal()
+        self.i_clka1   = Signal()
+        self.i_rom_adr = Signal(8)
+        self.o_rom_out = Signal(19)
+        self.mem       = Memory(width=19, depth=256, init=[
             0x54800, 0x24290, 0x28fe0, 0x00058, 0x00098, 0x04198, 0x0c9d0, 0x4c9d0,
             0x3c200, 0x24202, 0x30e58, 0x58270, 0x3c200, 0x18400, 0x10232, 0x24204,
             0x00758, 0x50374, 0x00758, 0x50374, 0x78600, 0x305d8, 0x30e00, 0x00a30,
@@ -44,23 +44,132 @@ class Firmware(Elaboratable):
     def elaborate(self, platform):
         m = Module()
         m.submodules.rdport = rdport = self.mem.read_port()
+        m.d.comb += rdport.addr.eq(self.i_rom_adr)
         with m.If(self.i_clka0):
-            m.d.sync += rdport.addr.eq(self.i_romadr)
-        with m.If(self.i_clka1):
-            m.d.sync += self.o_romout.eq(rdport.data)
+            m.d.sync += self.o_rom_out.eq(~rdport.data)
         return m
 
 class PC(Elaboratable):
     def __init__(self):
-        self.o_pc = Signal(8)
-        self.i_rom = Signal(19)
-        self.i_pch_set_rom = Signal()
-        self.i_pch_set_next = Signal()
-        self.i_pcl_set_rom = Signal()
-        self.i_pcl_set_next = Signal()
+        self.i_clka0       = Signal()
+        self.i_clka1       = Signal()
+        self.i_rom_out     = Signal(19)
+        self.i_global_test = Signal()
+        self.i_n1454       = Signal()
+        self.i_cmd_restore = Signal()
+        self.i_reset       = Signal()
+
+        self.o_rom_adr     = Signal(8)
+
+        self.pc_hold       = Signal(8)
+        self.pc_rom        = Signal(8)
+        self.pc_next       = Signal(8)
+
+        self.pch_set       = Signal(2)
+        self.pcl_set       = Signal(2)
+        self.jump          = Signal(4)
+
+        self.cmd_restore_h = Signal()
+        self.global_test_h = Signal()
+        self.sel_h         = Signal()
+        self.n1454_h       = Signal()
+        self.r9_h          = Signal()
+        self.r10_h         = Signal()
+        self.pc_reset      = Signal()
 
     def elaborate(self, platform):
         m = Module()
+
+        pjump = Signal()
+        
+        with m.If(self.i_clka0):
+            m.d.sync += self.cmd_restore_h.eq(self.i_cmd_restore)
+        m.d.comb += pjump.eq(self.cmd_restore_h & self.i_rom_out[9] & (self.i_rom_out[10] ^ self.i_rom_out[11]))
+
+        with m.If(self.i_clka1):
+            m.d.sync += self.jump[1].eq(pjump)
+
+        with m.Switch(self.pcl_set):
+            with m.Case(0):
+                m.d.comb += self.o_rom_adr[:4].eq(self.pc_rom[:4] | self.pc_next[:4] | self.jump)
+            with m.Case(1):
+                m.d.comb += self.o_rom_adr[:4].eq(self.pc_next[:4] | self.jump)
+            with m.Case(2):
+                m.d.comb += self.o_rom_adr[:4].eq(self.pc_rom[:4] | self.jump)
+            with m.Case(3):
+                m.d.comb += self.o_rom_adr[:4].eq(self.jump)
+
+        with m.Switch(self.pch_set):
+            with m.Case(0):
+                m.d.comb += self.o_rom_adr[4:].eq(self.pc_rom[4:] | self.pc_next[4:])
+            with m.Case(1):
+                m.d.comb += self.o_rom_adr[4:].eq(self.pc_next[4:])
+            with m.Case(2):
+                m.d.comb += self.o_rom_adr[4:].eq(self.pc_rom[4:])
+            with m.Case(3):
+                m.d.comb += self.o_rom_adr[4:].eq(0)
+        
+        with m.If(self.i_clka0):
+            m.d.sync += self.pc_hold.eq(self.o_rom_adr)
+
+        with m.If(self.i_clka1):
+            m.d.sync += self.pc_rom[0].eq(~self.i_rom_out[18])
+            m.d.sync += self.pc_rom[1].eq(~self.i_rom_out[17])
+            m.d.sync += self.pc_rom[2].eq(~self.i_rom_out[16])
+            m.d.sync += self.pc_rom[3].eq(~self.i_rom_out[15])
+            m.d.sync += self.pc_rom[4].eq(~self.i_rom_out[ 2])
+            m.d.sync += self.pc_rom[5].eq(~self.i_rom_out[ 1])
+            m.d.sync += self.pc_rom[6].eq(~self.i_rom_out[ 0])
+            m.d.sync += self.pc_rom[7].eq(~self.i_rom_out[11])
+
+            m.d.sync += self.pc_next.eq(self.pc_hold + (self.i_global_test & self.i_n1454))
+
+            m.d.sync += self.global_test_h.eq(self.i_global_test)
+            m.d.sync += self.sel_h.eq((self.i_rom_out[9] & ~self.i_rom_out[11]) | (~self.i_rom_out[9] & self.i_rom_out[10]))
+            m.d.sync += self.n1454_h.eq(self.i_n1454)
+            m.d.sync += self.r9_h.eq(self.i_rom_out[9])
+            m.d.sync += self.r10_h.eq(self.i_rom_out[9])
+            m.d.sync += self.pc_reset.eq(self.i_reset | pjump)
+
+        pcl_next = Signal()
+        m.d.comb += pcl_next.eq(self.sel_h & self.n1454_h & ~self.global_test_h)
+        m.d.comb += self.pcl_set[0].eq(self.pc_reset | ~pcl_next)
+        m.d.comb += self.pcl_set[1].eq(self.pc_reset | pcl_next)
+
+        pch_next = Signal()
+        m.d.comb += pch_next.eq(self.r10_h & ~self.r9_h & self.n1454_h & ~self.global_test_h)
+        m.d.comb += self.pch_set[0].eq(self.pc_reset | ~pch_next)
+        m.d.comb += self.pch_set[1].eq(self.pc_reset | pch_next)
+        return m
+
+class Stepping(Elaboratable):
+    def __init__(self):
+        self.i_clka0       = Signal()
+        self.i_clka1       = Signal()
+        self.i_rom_out     = Signal(19)
+        self.i_tr00        = Signal()
+
+        self.o_step        = Signal()
+        self.o_dirc        = Signal()
+        self.o_test        = Signal()
+
+        self.step_h        = Signal()
+        self.dirc_h        = Signal()
+        self.tr00_h        = Signal()
+
+    def elaborate(self, platform):
+        m = Module()
+
+        with m.If(self.i_clka1):
+            m.d.sync += self.step_h.eq(self.i_rom_out[3:9] == 0x1a)
+            m.d.sync += self.dirc_h.eq((self.i_rom_out[3:8] == 0x1b))
+
+        with m.If(self.i_clka0):
+            m.d.sync += self.o_step.eq(self.step_h)
+            m.d.sync += self.o_dirc.eq(self.dirc_h)
+            m.d.sync += self.tr00_h.eq(self.i_tr00)
+
+        m.d.comb += self.o_test.eq((self.i_rom_out[3:9] == 0x10) & (~self.tr00_h | self.o_dirc))
 
         return m
 
@@ -343,10 +452,25 @@ class wd1772(Elaboratable):
         self.i_clkp    = Signal()
         self.i_clkn    = Signal()
 
+        self.i_cs      = Signal()
+        self.i_rw      = Signal()
+        self.i_a       = Signal(2)
+        self.i_dal     = Signal(8)
+        self.o_dal     = Signal(8)
         self.i_mr      = Signal()
+        self.o_step    = Signal()
+        self.o_dirc    = Signal()
         self.i_rd      = Signal()
-
+        self.o_mo      = Signal()
+        self.o_wg      = Signal()
         self.o_wd      = Signal()
+        self.i_tr00    = Signal()
+        self.i_ip      = Signal()
+        self.i_wprt    = Signal()
+        self.i_dden    = Signal()
+        self.o_drq     = Signal()
+        self.o_intrq   = Signal()
+
 
         self.clks0     = Signal()
         self.clks1     = Signal()
@@ -354,21 +478,50 @@ class wd1772(Elaboratable):
         self.fm_enable = Signal()
         self.fm_tick   = Signal()
         self.pll_on    = Signal()
+        self.reset     = Signal()
+        self.reset_h   = Signal()
+        self.tr00      = Signal()
+        self.tr00_h    = Signal()
+        self.index     = Signal()
+        self.index_h   = Signal()
 
     def elaborate(self, platform):
         m = Module()
-#        m.submodules.firmware = firmware = Firmware()
+        m.submodules.firmware = firmware = Firmware()
         m.submodules.pll      = pll      = PLL()
+        m.submodules.pc       = pc       = PC()
+        m.submodules.stepping = stepping = Stepping()
+
+        test = Signal()
+        wprt = Signal()
+        m.d.comb += wprt.eq((firmware.o_rom_out[3:9] == 0x0e) & self.i_wprt)
+        m.d.comb += test.eq((firmware.o_rom_out[12:15] != 3) & ~stepping.o_test & ~wprt)
 
         m.d.comb += pll.i_clks0.eq(self.clks0)
         m.d.comb += pll.i_clks1.eq(self.clks1)
         m.d.comb += pll.i_mr.eq(self.i_mr)
         m.d.comb += pll.i_rd.eq(self.i_rd)
-        m.d.comb += pll.i_pll_on.eq(0)
         m.d.comb += self.o_wd.eq(pll.o_wd)
 
-        with m.If(self.i_clkp):
-            m.d.sync += self.fm_tick.eq(~self.fm_tick)
+        m.d.comb += pc.i_clka0.eq(pll.o_clka0)
+        m.d.comb += pc.i_clka1.eq(pll.o_clka1)
+        m.d.comb += pc.i_rom_out.eq(firmware.o_rom_out)
+        m.d.comb += pc.i_reset.eq(self.reset)
+        m.d.comb += pc.i_global_test.eq(test)
+
+        m.d.comb += pc.i_cmd_restore.eq(0)
+        m.d.comb += pc.i_n1454.eq(1)
+
+        m.d.comb += firmware.i_rom_adr.eq(pc.o_rom_adr)
+        m.d.comb += firmware.i_clka0.eq(pll.o_clka0)
+        m.d.comb += firmware.i_clka1.eq(pll.o_clka1)
+
+        m.d.comb += stepping.i_clka0.eq(pll.o_clka0)
+        m.d.comb += stepping.i_clka1.eq(pll.o_clka1)
+        m.d.comb += stepping.i_rom_out.eq(firmware.o_rom_out)
+        m.d.comb += stepping.i_tr00.eq(self.tr00)
+        m.d.comb += self.o_step.eq(stepping.o_step)
+        m.d.comb += self.o_dirc.eq(stepping.o_dirc)
 
         with m.If(self.fm_enable):
             m.d.comb += self.clks1.eq(self.i_clkp &  self.fm_tick)
@@ -376,5 +529,20 @@ class wd1772(Elaboratable):
         with m.Else():
             m.d.comb += self.clks1.eq(self.i_clkp)
             m.d.comb += self.clks0.eq(self.i_clkn)
-        
+
+
+        with m.If(pll.o_clka1):
+            m.d.sync += self.reset_h.eq(self.i_mr)
+            m.d.sync += self.tr00_h.eq(self.i_tr00)
+            m.d.sync += self.index_h.eq(self.i_ip)
+        with m.If(pll.o_clka0):
+            m.d.sync += self.reset.eq(~self.reset_h)
+            m.d.sync += self.tr00.eq(~self.tr00_h)
+            m.d.sync += self.index.eq(~self.index_h)
+
+        with m.If(self.i_clkp):
+            m.d.sync += self.fm_tick.eq(~self.fm_tick)
+
+        # n1214 = !pll_on
+        m.d.comb += pll.i_pll_on.eq(firmware.o_rom_out[12:14] == 1)
         return m

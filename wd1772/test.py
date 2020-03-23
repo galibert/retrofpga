@@ -22,9 +22,11 @@ sim.add_process(clocking_proc)
 def signals_proc():
     yield wd.i_mr.eq(0)
     yield wd.i_rd.eq(1)
-    for i in range(8):
+    for i in range(32):
         yield Tick()
     yield wd.i_mr.eq(1)
+    for i in range(64):
+        yield Tick()
     yield Tick()
     
 sim.add_process(signals_proc)
