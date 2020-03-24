@@ -31,6 +31,15 @@ class overdrive(Elaboratable):
         self.i_rw1    = Signal()
         self.o_dtack1 = Signal()
 
+        self.i_ab2    = Signal(23)
+        self.i_db2    = Signal(16)
+        self.o_db2    = Signal(16)
+        self.i_uds2   = Signal()
+        self.i_lds2   = Signal()
+        self.i_as2    = Signal()
+        self.i_rw2    = Signal()
+        self.o_dtack2 = Signal()
+
         self.o_nhsy = Signal()
         self.o_nhbk = Signal()
         self.o_nvsy = Signal()
@@ -81,6 +90,23 @@ class overdrive(Elaboratable):
         hostint1 = Signal()
         hostint2 = Signal()
 
+        rom21cs  = Signal()
+        rom22cs  = Signal()
+        ram2cs   = Signal()
+        lvccs    = Signal()
+        lvcset1  = Signal()
+        lvcset2  = Signal()
+        crtint   = Signal()
+        objcs    = Signal()
+        objcha   = Signal()
+        syswra   = Signal()
+        objset   = Signal()
+        alustart = Signal()
+        acomcs   = Signal()
+        aluwkcs  = Signal()
+        lvccha1  = Signal()
+        lvccha2  = Signal()
+
         m.d.comb += rom1cs.eq(   ~((self.i_ab1[18-1:22-1] == 0x00) & (self.i_as1 == 0)))
         m.d.comb += ram1cs.eq(   ~((self.i_ab1[18-1:22-1] == 0x01) & (self.i_as1 == 0)))
         m.d.comb += cramcs.eq(   ~((self.i_ab1[18-1:22-1] == 0x02) & (self.i_as1 == 0)))
@@ -106,6 +132,23 @@ class overdrive(Elaboratable):
         m.d.comb += psaccha2.eq( ~((self.i_ab1[15-1:18-1] ==  0x5) & (self.i_ab1[21-1] == 1) & (self.i_ab1[23-1] == 0) & (self.i_as1 == 0)))
         m.d.comb += hostint1.eq( ~((self.i_ab1[15-1:18-1] ==  0x6) & (self.i_ab1[21-1] == 1) & (self.i_ab1[23-1] == 0) & (self.i_as1 == 0)))
         m.d.comb += hostint2.eq( ~((self.i_ab1[15-1:18-1] ==  0x7) & (self.i_ab1[21-1] == 1) & (self.i_ab1[23-1] == 0) & (self.i_as1 == 0)))
+
+        m.d.comb += rom21cs.eq(  ~((self.i_ab2[18-1:22-1] == 0x00) & (self.i_as2 == 0)))
+        m.d.comb += rom22cs.eq(  ~((self.i_ab2[18-1:22-1] == 0x01) & (self.i_as2 == 0)))
+        m.d.comb += ram2cs.eq(   ~((self.i_ab2[18-1:22-1] == 0x02) & (self.i_as2 == 0)))
+        m.d.comb += lvccs.eq(    ~((self.i_ab2[18-1:22-1] == 0x03) & (self.i_as2 == 0)))
+        m.d.comb += lvcset1.eq(  ~((self.i_ab2[15-1:22-1] == 0x20) & (self.i_as2 == 0)))
+        m.d.comb += lvcset2.eq(  ~((self.i_ab2[15-1:22-1] == 0x21) & (self.i_as2 == 0)))
+        m.d.comb += crtint.eq(   ~((self.i_ab2[15-1:22-1] == 0x22) & (self.i_as2 == 0)))
+        m.d.comb += objcs.eq(    ~((self.i_ab2[15-1:22-1] == 0x23) & (self.i_as2 == 0)))
+        m.d.comb += objcha.eq(   ~((self.i_ab2[15-1:22-1] == 0x24) & (self.i_as2 == 0)))
+        m.d.comb += syswra.eq(   ~((self.i_ab2[15-1:22-1] == 0x25) & (self.i_as2 == 0)))
+        m.d.comb += objset.eq(   ~((self.i_ab2[15-1:22-1] == 0x26) & (self.i_as2 == 0)))
+        m.d.comb += alustart.eq( ~((self.i_ab2[18-1:22-1] == 0x05) & (self.i_as2 == 0)))
+        m.d.comb += acomcs.eq(   ~((self.i_ab2[15-1:18-1] ==  0x0) & (self.i_ab2[21-1] == 1) & (self.i_ab2[23-1] == 0) & (self.i_as2 == 0)))
+        m.d.comb += aluwkcs.eq(  ~((self.i_ab2[15-1:18-1] ==  0x1) & (self.i_ab2[21-1] == 1) & (self.i_ab2[23-1] == 0) & (self.i_as2 == 0)))
+        m.d.comb += lvccha1.eq(  ~((self.i_ab2[15-1:18-1] ==  0x3) & (self.i_ab2[21-1] == 1) & (self.i_ab2[23-1] == 0) & (self.i_as2 == 0)))
+        m.d.comb += lvccha2.eq(  ~((self.i_ab2[15-1:18-1] ==  0x4) & (self.i_ab2[21-1] == 1) & (self.i_ab2[23-1] == 0) & (self.i_as2 == 0)))
         
         # dtack 1
         hcomdtk  = Signal(reset = 1)
@@ -115,6 +158,21 @@ class overdrive(Elaboratable):
         # data bus collection 1
         m.d.comb += self.o_db1[0:8].eq(timings.o_db)
         m.d.comb += self.o_db1[8:16].eq(roz_1.o_db & roz_2.o_db)
+
+        # dtack 2
+        acomdtk  = Signal(reset = 1)
+        aluwkdtk = Signal(reset = 1)
+        lvcchad1 = Signal(reset = 1)
+        lvcchad2 = Signal(reset = 1)
+
+        with m.If(self.i_as2):
+            m.d.sync += lvcchad1.eq(1)
+            m.d.sync += lvcchad2.eq(1)
+        with m.Elif(timings.o_clk2n):
+            m.d.sync += lvcchad1.eq(lvccha1 & lvccha2)
+            m.d.sync += lvcchad2.eq(lvcchad1)
+
+        m.d.comb += self.o_dtack2.eq(acomdtk & aluwkdtk & (self.i_as1 | self.i_ab1[21-1]) & lvcchad2)
 
 
         # Timings hookup

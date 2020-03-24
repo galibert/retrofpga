@@ -67,11 +67,13 @@ struct rwrite {
   u16 data;
   u8 uds;
   u8 lds;
+  u8 id;
 };
 
 u16 *palette;
 u8 *roz_1_ram;
 u8 *roz_2_ram;
+u8 *lvc_ram;
 
 std::vector<rwrite> rwrites;
 
@@ -214,11 +216,9 @@ void rozshow(int x, int y)
 }
 
 
-void show(const char *mark = "")
+void show1(const char *mark = "")
 {
-  rozshow(0,0);
-
-  printf("%6d: %c%c %c%c %c%c %c%c%c%c  as=%d%d%d a=%06x rw=%d dtack=%d datai=%04x datao=%04x %s\n",
+  printf("%6d: 1 %c%c %c%c %c%c %c%c%c%c  as=%d%d%d a=%06x rw=%d dtack=%d datai=%04x datao=%04x %s\n",
 	 p24tick,
 	 R(p_o__p12m) ? '#' : '-',
 	 R(p_o__n12m) ? '#' : '-',
@@ -239,6 +239,32 @@ void show(const char *mark = "")
 	 R(p_o__dtack1),
 	 R(p_i__db1),
 	 R(p_o__db1),
+	 mark);
+}
+
+void show2(const char *mark = "")
+{
+  printf("%6d: 2 %c%c %c%c %c%c %c%c%c%c  as=%d%d%d a=%06x rw=%d dtack=%d datai=%04x datao=%04x %s\n",
+	 p24tick,
+	 R(p_o__p12m) ? '#' : '-',
+	 R(p_o__n12m) ? '#' : '-',
+	 R(p_o__p6m)  ? '#' : '-',
+	 R(p_o__n6m)  ? '#' : '-',
+	 R(p_o__p6md) ? '#' : '-',
+	 R(p_o__n6md) ? '#' : '-',
+	 R(p_o__nvbk) ? '-' : 'v',
+	 R(p_o__nvsy) ? '-' : 'V',
+	 R(p_o__nhbk) ? '-' : 'h',
+	 R(p_o__nhsy) ? '-' : 'H',
+
+	 R(p_i__as2),
+	 R(p_i__uds2),
+	 R(p_i__lds2),
+	 R(p_i__ab2) << 1,
+	 R(p_i__rw2),
+	 R(p_o__dtack2),
+	 R(p_i__db2),
+	 R(p_o__db2),
 	 mark);
 }
 
@@ -329,42 +355,42 @@ void m68000_1_w(std::function<void ()> wp, std::function<void ()> wn, u32 adr, u
     printf("Write cycle started %06x %04x %d%d\n", adr, val, uds, lds);
   wp(); // s0
   if(v)
-    show("s0");
+    show1("s0");
   wn(); // s1
   if(v)
-    show("s1");
+    show1("s1");
   W(p_i__ab1, 23, adr >> 1);
   wp(); // s2
   if(v)
-    show("s2");
+    show1("s2");
   W(p_i__as1, 1, 0u);
   W(p_i__rw1, 1, 0u);
   wn(); // s3
   if(v)
-    show("s3");
+    show1("s3");
   W(p_i__db1, 16, val);
   wp(); // s4
   if(v)
-    show("s4");
+    show1("s4");
   W(p_i__uds1, 1, uds);
   W(p_i__lds1, 1, lds);
   while(R(p_o__dtack1)) {
     wn();
     if(v)
-      show();
+      show1();
     wp();
     if(v)
-      show();
+      show1();
   }
   wn(); // s5
   if(v)
-    show("s5");
+    show1("s5");
   wp(); // s6
   if(v)
-    show("s6");
+    show1("s6");
   wn(); // s7
   if(v)
-    show("s7");
+    show1("s7");
   W(p_i__as1, 1, 1u);
   W(p_i__uds1, 1, 1u);
   W(p_i__lds1, 1, 1u);
@@ -379,45 +405,148 @@ u16 m68000_1_r(std::function<void ()> wp, std::function<void ()> wn, u32 adr, u8
     printf("Read cycle started %06x %d%d\n", adr, uds, lds);
   wp(); // s0
   if(v)
-    show("s0");
+    show1("s0");
   W(p_i__rw1, 1, 1u);
   wn(); // s1
   if(v)
-    show("s1");
+    show1("s1");
   W(p_i__ab1, 23, adr >> 1);
   wp(); // s2
   if(v)
-    show("s2");
+    show1("s2");
   W(p_i__as1, 1, 0u);
   W(p_i__uds1, 1, uds);
   W(p_i__lds1, 1, lds);
   wn(); // s3
   if(v)
-    show("s3");
+    show1("s3");
   wp(); // s4
   if(v)
-    show("s4");
+    show1("s4");
   while(R(p_o__dtack1)) {
     wn();
     if(v)
-      show();
+      show1();
     wp();
     if(v)
-      show();
+      show1();
   }
   wn(); // s5
   if(v)
-    show("s5");
+    show1("s5");
   wp(); // s6
   if(v)
-    show("s6");
+    show1("s6");
   u16 val = R(p_o__db1);
   wn(); // s7
   if(v)
-    show("s7");
+    show1("s7");
   W(p_i__as1, 1, 1u);
   W(p_i__uds1, 1, 1u);
   W(p_i__lds1, 1, 1u);
+
+  if(v)
+    printf("Read cycle done -> %04x\n", val);
+
+  return val;
+}
+
+
+void m68000_2_w(std::function<void ()> wp, std::function<void ()> wn, u32 adr, u16 val, u8 uds, u8 lds, bool v = false)
+{
+  if(v)
+    printf("Write cycle started %06x %04x %d%d\n", adr, val, uds, lds);
+  wp(); // s0
+  if(v)
+    show2("s0");
+  wn(); // s1
+  if(v)
+    show2("s1");
+  W(p_i__ab2, 23, adr >> 1);
+  wp(); // s2
+  if(v)
+    show2("s2");
+  W(p_i__as2, 1, 0u);
+  W(p_i__rw2, 1, 0u);
+  wn(); // s3
+  if(v)
+    show2("s3");
+  W(p_i__db2, 16, val);
+  wp(); // s4
+  if(v)
+    show2("s4");
+  W(p_i__uds2, 1, uds);
+  W(p_i__lds2, 1, lds);
+  while(R(p_o__dtack2)) {
+    wn();
+    if(v)
+      show2();
+    wp();
+    if(v)
+      show2();
+  }
+  wn(); // s5
+  if(v)
+    show2("s5");
+  wp(); // s6
+  if(v)
+    show2("s6");
+  wn(); // s7
+  if(v)
+    show2("s7");
+  W(p_i__as2, 1, 1u);
+  W(p_i__uds2, 1, 1u);
+  W(p_i__lds2, 1, 1u);
+
+  if(v)
+    printf("Write cycle done\n");
+}
+
+u16 m68000_2_r(std::function<void ()> wp, std::function<void ()> wn, u32 adr, u8 uds, u8 lds, bool v = false)
+{
+  if(v)
+    printf("Read cycle started %06x %d%d\n", adr, uds, lds);
+  wp(); // s0
+  if(v)
+    show2("s0");
+  W(p_i__rw2, 1, 1u);
+  wn(); // s1
+  if(v)
+    show2("s1");
+  W(p_i__ab2, 23, adr >> 1);
+  wp(); // s2
+  if(v)
+    show2("s2");
+  W(p_i__as2, 1, 0u);
+  W(p_i__uds2, 1, uds);
+  W(p_i__lds2, 1, lds);
+  wn(); // s3
+  if(v)
+    show2("s3");
+  wp(); // s4
+  if(v)
+    show2("s4");
+  while(R(p_o__dtack2)) {
+    wn();
+    if(v)
+      show2();
+    wp();
+    if(v)
+      show2();
+  }
+  wn(); // s5
+  if(v)
+    show2("s5");
+  wp(); // s6
+  if(v)
+    show2("s6");
+  u16 val = R(p_o__db2);
+  wn(); // s7
+  if(v)
+    show2("s7");
+  W(p_i__as2, 1, 1u);
+  W(p_i__uds2, 1, 1u);
+  W(p_i__lds2, 1, 1u);
 
   if(v)
     printf("Read cycle done -> %04x\n", val);
@@ -433,6 +562,12 @@ void run_design()
   W(p_i__ab1, 23, 0u);
   W(p_i__db1, 16, 0u);
   W(p_i__rw1,  1, 1u);
+  W(p_i__uds2, 1, 1u);
+  W(p_i__lds2, 1, 1u);
+  W(p_i__as2,  1, 1u);
+  W(p_i__ab2, 23, 0u);
+  W(p_i__db2, 16, 0u);
+  W(p_i__rw2,  1, 1u);
 
   reset();
   do
@@ -638,6 +773,9 @@ int main(int argc, char **argv)
   sprintf(path, "captures/%s_%d_roz_2.bin", selname, selid);
   roz_2_ram = static_cast<u8 *>(file_load(path));
 
+  sprintf(path, "captures/%s_%d_lvc.bin", selname, selid);
+  lvc_ram = static_cast<u8 *>(file_load(path));
+
   char line[4096];
 
   sprintf(path, "captures/%s_%d_regs.txt", selname, selid);
@@ -645,18 +783,20 @@ int main(int argc, char **argv)
   while(fgets(line, sizeof(line), rfd)) {
     //      for(int i=0; line[i]; i++)
     //	  printf("%03d: %02x %c\n", i, line[i], line[i]);
-    assert(line[6] == ' ');
-    line[6] = 0;
-    line[11] = 0;
-    u32 adr = strtol(line, nullptr, 16);
-    u16 v1 = strtol(line+7, nullptr, 16);
-    u8 v2 = strtol(line+9, nullptr, 16);
-    if(line[7] == '.')
-      rwrites.emplace_back(rwrite{ adr, v2, 0, 1 });
-    else if(line[9] == '.')
-      rwrites.emplace_back(rwrite{ adr, u16(v1 << 8), 1, 0 });
+    assert(line[1] == ' ');
+    assert(line[8] == ' ');
+    line[8] = 0;
+    line[13] = 0;
+    u8 id = line[0] == 'b';
+    u32 adr = strtol(line+2, nullptr, 16);
+    u16 v1 = strtol(line+9, nullptr, 16);
+    u8 v2 = strtol(line+11, nullptr, 16);
+    if(line[9] == '.')
+      rwrites.emplace_back(rwrite{ adr, v2, 0, 1, id });
+    else if(line[11] == '.')
+      rwrites.emplace_back(rwrite{ adr, u16(v1 << 8), 1, 0, id });
     else
-      rwrites.emplace_back(rwrite{ adr, v1, 1, 1 });
+      rwrites.emplace_back(rwrite{ adr, v1, 1, 1, id });
   }
   fclose(rfd);
 
