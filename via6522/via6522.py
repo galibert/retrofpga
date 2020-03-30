@@ -211,13 +211,16 @@ class via6522(Elaboratable):
         self.o_pb_drive = Signal(8)
         self.i_res = Signal()
 
-        self.c_cs = Signal()
-        self.c_rw = Signal()
-        self.c_r = Signal()
-        self.c_w = Signal()
-        self.c_rs = Signal(4)
-        self.c_rsl = Signal(4)
+        self.o_ddrx = Signal(8)
+        self.o_dw   = Signal()
 
+        self.c_cs  = Signal()
+        self.c_rw  = Signal()
+        self.c_r   = Signal()
+        self.c_w   = Signal()
+        self.c_rs  = Signal(4)
+        self.c_rsl = Signal(4)
+        self.c_d   = Signal(8)
     def elaborate(self, platform):
         m = Module()
         m.submodules.ora = ora = Ora()
@@ -227,6 +230,9 @@ class via6522(Elaboratable):
         m.submodules.pcr = pcr = Reg()
         m.submodules.acr = acr = Reg()
 
+        m.d.comb += self.o_ddrx.eq(orb.c_ddr)
+        m.d.comb += self.o_dw.eq(orb.i_ddr_w)
+        
         # connect the clocks
         m.d.comb += ora.i_clkp1.eq(self.i_clkp1)
         m.d.comb += ora.i_clkp2.eq(self.i_clkp2)
@@ -244,14 +250,14 @@ class via6522(Elaboratable):
         # connect the buses
         m.d.comb += self.o_d.eq(ora.o_d & orb.o_d & pcr.o_d & acr.o_d)
 
-        m.d.comb += ora.i_d.eq(self.i_d)
+        m.d.comb += ora.i_d.eq(self.c_d)
         m.d.comb += ora.i_p.eq(pa.o_rp)
         m.d.comb += pa.i_rp.eq(ora.o_p)
         m.d.comb += self.o_pa.eq(pa.o_p)
         m.d.comb += pa.i_p.eq(self.i_pa)
         m.d.comb += ora.i_res.eq(self.i_res)
 
-        m.d.comb += orb.i_d.eq(self.i_d)
+        m.d.comb += orb.i_d.eq(self.c_d)
         m.d.comb += orb.i_p.eq(pb.o_rp)
         m.d.comb += pb.i_rp.eq(orb.o_p)
         m.d.comb += pb.i_rddr.eq(orb.o_ddr)
@@ -260,10 +266,10 @@ class via6522(Elaboratable):
         m.d.comb += pb.i_p.eq(self.i_pb)
         m.d.comb += orb.i_res.eq(self.i_res)
 
-        m.d.comb += pcr.i_d.eq(self.i_d)
+        m.d.comb += pcr.i_d.eq(self.c_d)
         m.d.comb += pcr.i_res.eq(self.i_res)
 
-        m.d.comb += acr.i_d.eq(self.i_d)
+        m.d.comb += acr.i_d.eq(self.c_d)
         m.d.comb += acr.i_res.eq(self.i_res)
         
         # chip select and r/w handling, clocked on p3
@@ -277,6 +283,8 @@ class via6522(Elaboratable):
         # data i/o
         with m.If(self.i_clkp1):
             m.d.sync += self.o_d_drive.eq(self.c_cs & self.c_rw & ~self.i_res)
+        with m.If(self.i_clkp1):
+            m.d.sync += self.c_d.eq(self.i_d)
 
         # rs latching and address decode
         with m.If(self.i_clkp3):

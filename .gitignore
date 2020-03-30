@@ -5,3 +5,5 @@ __pycache__
 yosys.cmd
 overdrive/overdrive.cc
 overdrive/overdrive
+via6522/via6522.cc
+via6522/via6522
