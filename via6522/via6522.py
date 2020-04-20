@@ -221,6 +221,7 @@ class via6522(Elaboratable):
         self.c_rs  = Signal(4)
         self.c_rsl = Signal(4)
         self.c_d   = Signal(8)
+
     def elaborate(self, platform):
         m = Module()
         m.submodules.ora = ora = Ora()
@@ -277,34 +278,38 @@ class via6522(Elaboratable):
             m.d.sync += self.c_cs.eq(self.i_cs1 & ~self.i_cs2)
             m.d.sync += self.c_rw.eq(self.i_rw)
 
-        m.d.comb += self.c_r.eq(self.c_cs & self.c_rw)
+        m.d.comb += self.c_r.eq(self.i_cs1 & ~self.i_cs2 & self.i_rw)
         m.d.comb += self.c_w.eq(self.c_cs & ~self.c_rw)
         
         # data i/o
         with m.If(self.i_clkp1):
             m.d.sync += self.o_d_drive.eq(self.c_cs & self.c_rw & ~self.i_res)
+        with m.Elif(self.i_clkp2):
+            m.d.sync += self.o_d_drive.eq(0)
         with m.If(self.i_clkp1):
             m.d.sync += self.c_d.eq(self.i_d)
 
         # rs latching and address decode
+        # we can't use c_rs or c_cs in the _r signals because the reads are internally
+        # clocked on clkp3 too, so the syncs are in the submodules
         with m.If(self.i_clkp3):
             m.d.sync += self.c_rs.eq(self.i_rs)
         with m.If(self.i_clkp1):
             m.d.sync += self.c_rsl.eq(self.c_rs)
-        
-        m.d.comb += ora.i_or_r.eq(self.c_r & ((self.c_rs  == 0xf) | (self.c_rs  == 0x1)))
+
+        m.d.comb += ora.i_or_r.eq(self.c_r & ((self.i_rs  == 0xf) | (self.i_rs  == 0x1)))
         m.d.comb += ora.i_or_w.eq(self.c_w & ((self.c_rsl == 0xf) | (self.c_rsl == 0x1)))
-        m.d.comb += ora.i_ddr_r.eq(self.c_r & (self.c_rs  == 0x3))
+        m.d.comb += ora.i_ddr_r.eq(self.c_r & (self.i_rs  == 0x3))
         m.d.comb += ora.i_ddr_w.eq(self.c_w & (self.c_rsl == 0x3))
 
-        m.d.comb += orb.i_or_r.eq(self.c_r & (self.c_rs  == 0x0))
+        m.d.comb += orb.i_or_r.eq(self.c_r & (self.i_rs  == 0x0))
         m.d.comb += orb.i_or_w.eq(self.c_w & (self.c_rsl == 0x0))
-        m.d.comb += orb.i_ddr_r.eq(self.c_r & (self.c_rs  == 0x2))
+        m.d.comb += orb.i_ddr_r.eq(self.c_r & (self.i_rs  == 0x2))
         m.d.comb += orb.i_ddr_w.eq(self.c_w & (self.c_rsl == 0x2))
 
-        m.d.comb += pcr.i_r.eq(self.c_r & (self.c_rs  == 0xc))
+        m.d.comb += pcr.i_r.eq(self.c_r & (self.i_rs  == 0xc))
         m.d.comb += pcr.i_w.eq(self.c_w & (self.c_rsl == 0xc))
-        m.d.comb += acr.i_r.eq(self.c_r & (self.c_rs  == 0xb))
+        m.d.comb += acr.i_r.eq(self.c_r & (self.i_rs  == 0xb))
         m.d.comb += acr.i_w.eq(self.c_w & (self.c_rsl == 0xb))
 
         m.d.comb += pa.i_p_input_latch.eq(1)

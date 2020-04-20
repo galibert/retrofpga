@@ -35,7 +35,11 @@ class k053252(Elaboratable):
         self.o_clk3n = Signal()
         self.o_clk4p = Signal()
         self.o_clk4n = Signal()
-
+        self.o_pep   = Signal()
+        self.o_pen   = Signal()
+        self.o_pqp   = Signal()
+        self.o_pqn   = Signal()
+        
         self.hc       = Signal(10, reset = 0x17f)
         self.hfp      = Signal( 9, reset = 0x010)
         self.hbp      = Signal( 9, reset = 0x030)
@@ -68,10 +72,16 @@ class k053252(Elaboratable):
         m.d.comb += self.o_clk1n.eq(self.clki[:1] == 1)
         m.d.comb += self.o_clk2p.eq(self.clki[:2] == 0)
         m.d.comb += self.o_clk2n.eq(self.clki[:2] == 2)
-        m.d.comb += self.o_clk3p.eq(1)
-        m.d.comb += self.o_clk3n.eq(0)
+        m.d.comb += self.o_clk3p.eq(self.clki[:3] == 0)
+        m.d.comb += self.o_clk3n.eq(self.clki[:3] == 4)
         m.d.comb += self.o_clk4p.eq(self.clki[:2] == 1)
         m.d.comb += self.o_clk4n.eq(self.clki[:2] == 3)
+        m.d.comb += self.o_clk3p.eq(self.clki[:3] == 0)
+        m.d.comb += self.o_clk3n.eq(self.clki[:3] == 4)
+        m.d.comb += self.o_pep  .eq(self.clki[:3] == 1)
+        m.d.comb += self.o_pen  .eq(self.clki[:3] == 5)
+        m.d.comb += self.o_pqp  .eq(self.clki[:3] == 3)
+        m.d.comb += self.o_pqn  .eq(self.clki[:3] == 7)
 
         with m.If(self.i_clkp):
             m.d.sync += self.clki.eq(self.clki + 1)

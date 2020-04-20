@@ -18,26 +18,34 @@ cxxrtl_design::p_via6522 via6522;
 #define R(port) (via6522.port.curr.data[0])
 #define W(port, bits, val) via6522.port.next = value<bits>(val)
 
+void step(int phase)
+{
+  W(p_i__clkp1, 1, 0u);
+  W(p_i__clkp2, 1, 0u);
+  W(p_i__clkp3, 1, 0u);
+  switch(phase) {
+  case 1: W(p_i__clkp1, 1, 1u); break;
+  case 2: W(p_i__clkp2, 1, 1u); break;
+  case 3: W(p_i__clkp3, 1, 1u); break;
+  }
+
+  W(p_clk, 1, 1u);
+  via6522.step();
+  W(p_clk, 1, 0u);
+  via6522.step();
+
+  switch(phase) {
+  case 1: W(p_i__clkp1, 1, 0u); break;
+  case 2: W(p_i__clkp2, 1, 0u); break;
+  case 3: W(p_i__clkp3, 1, 0u); break;
+  }
+}
+
 void cycle()
 {
-  W(p_i__clkp1, 1, 1u);
-  W(p_clk, 1, 1u);
-  via6522.step();
-  W(p_clk, 1, 0u);
-  via6522.step();
-  W(p_i__clkp1, 1, 0u);
-  W(p_i__clkp2, 1, 1u);
-  W(p_clk, 1, 1u);
-  via6522.step();
-  W(p_clk, 1, 0u);
-  via6522.step();
-  W(p_i__clkp2, 1, 0u);
-  W(p_i__clkp3, 1, 1u);
-  W(p_clk, 1, 1u);
-  via6522.step();
-  W(p_clk, 1, 0u);
-  via6522.step();
-  W(p_i__clkp3, 1, 0u);
+  step(2);
+  step(3);
+  step(1);
 }
 
 void w(u8 adr, u8 data)
@@ -47,30 +55,35 @@ void w(u8 adr, u8 data)
   W(p_i__rs, 4, adr);
   W(p_i__rw, 1, 0U);
 
-  W(p_i__clkp1, 1, 1u);
-  W(p_clk, 1, 1u);
-  via6522.step();
-  W(p_clk, 1, 0u);
-  via6522.step();
-  //  printf("a == a=%x d=%02x w=%d (%02x %d)\n", R(p_i__rs), R(p_i__d), R(p_o__dw), R(p_o__ddrx), R(p_o__dw));
-  W(p_i__clkp1, 1, 0u);
-  W(p_i__clkp2, 1, 1u);
+  step(3);
+  step(1);
+
   W(p_i__d, 8, data);
-  W(p_clk, 1, 1u);
-  via6522.step();
-  W(p_clk, 1, 0u);
-  via6522.step();
-  //  printf("b == a=%x d=%02x w=%d (%02x %d)\n", R(p_i__rs), R(p_i__d), R(p_o__dw), R(p_o__ddrx), R(p_o__dw));
-  W(p_i__clkp2, 1, 0u);
-  W(p_i__clkp3, 1, 1u);
-  W(p_clk, 1, 1u);
-  via6522.step();
-  W(p_clk, 1, 0u);
-  via6522.step();
-  //  printf("c == a=%x d=%02x w=%d (%02x %d)\n", R(p_i__rs), R(p_i__d), R(p_o__dw), R(p_o__ddrx), R(p_o__dw));
-  W(p_i__clkp3, 1, 0u);
+
+  step(2);
+
   W(p_i__cs1, 1, 0U);
   W(p_i__cs2, 1, 1U);
+}
+
+u8 r(u8 adr)
+{
+  W(p_i__cs1, 1, 1U);
+  W(p_i__cs2, 1, 0U);
+  W(p_i__rs, 4, adr);
+  W(p_i__rw, 1, 1U);
+
+  step(3);
+  step(1);
+
+  u8 res = R(p_o__d);
+
+  step(2);
+
+  W(p_i__cs1, 1, 0U);
+  W(p_i__cs2, 1, 1U);
+
+  return res;
 }
 
 void reset()
@@ -96,13 +109,16 @@ void run_design()
 {
   reset();
 
-  printf(".. -> pa=%02x pb=%02x.%02x (%02x %d)\n", R(p_o__pa), R(p_o__pb), R(p_o__pb__drive), R(p_o__ddrx), R(p_o__dw));
-  w(0x3, 0xf8);
-  printf(".. -> pa=%02x pb=%02x.%02x (%02x %d)\n", R(p_o__pa), R(p_o__pb), R(p_o__pb__drive), R(p_o__ddrx), R(p_o__dw));
-  for(int i=0; i<16; i++) {
-    w(0x1, i*0x11);
-    printf("%02x -> pa=%02x pb=%02x.%02x (%02x %d)\n", i, R(p_o__pa), R(p_o__pb), R(p_o__pb__drive), R(p_o__ddrx), R(p_o__dw));
-  }
+  w(0x2, 0xf7);
+  w(0x0, 0xb7);
+  w(0xc, 0xdd);
+  w(0xe, 0x7f);
+  w(0xb, 0x00);
+  w(0xf, 0x07);
+  cycle();
+  cycle();
+  printf("%02x / %02x\n", r(2), R(p_o__ddrx));
+  cycle();
 }
 
 

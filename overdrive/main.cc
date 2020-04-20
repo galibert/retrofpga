@@ -268,26 +268,31 @@ void show2(const char *mark = "")
 	 mark);
 }
 
+void step()
+{
+    fprintf(stderr, "step size %lu\n", overdrive.step());
+}
+
 void reset()
 {
   W(p_clk, 1, 1u);
   W(p_rst, 1, 1u);
-  overdrive.step();
+  step();
   W(p_clk, 1, 0u);
-  overdrive.step();
+  step();
   W(p_clk, 1, 1u);
-  overdrive.step();
+  step();
   W(p_clk, 1, 0u);
   W(p_rst, 1, 0u);
-  overdrive.step();
+  step();
 }
 
 void tick()
 {
   W(p_clk, 1, 1u);
-  overdrive.step();
+  step();
   W(p_clk, 1, 0u);
-  overdrive.step();
+  step();
 
   p24tick ++;
   if(R(p_o__p12m))
