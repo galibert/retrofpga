@@ -48,12 +48,15 @@ int main(int argc, char **argv)
   nclk = &ditems["i_nclk"];
   o_e  = &ditems["o_e"];
 
-  auto &lsfr = ditems["eclock estate"];
+  auto &state = ditems["eclock estate"];
+  auto &lfsr = ditems["eclock elfsr"];
+  auto &nlfsr = ditems["eclock enlfsr"];
+  auto &ereset = ditems["eclock ereset"];
 
   reset();
 
-  for(int i=0; i != 100; i++) {
-    printf("%3d: %d %x\n", i, o_e->curr[0], lsfr.curr[0]);
+  for(int i=0; i != 60; i++) {
+    printf("%3d: %d (%x %x) -> %x reset=%x\n", i, o_e->curr[0], lfsr.curr[0], nlfsr.curr[0], state.curr[0], ereset.curr[0]);
     if(i & 1)
       stepn();
     else
