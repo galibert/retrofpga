@@ -7,3 +7,6 @@ overdrive/overdrive.cc
 overdrive/overdrive
 via6522/via6522.cc
 via6522/via6522
+*/roms
+m68000/m68000.cc
+m68000/m68000
