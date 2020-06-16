@@ -53,14 +53,17 @@ int main(int argc, char **argv)
   auto &nlfsr = ditems["eclock enlfsr"];
   auto &ereset = ditems["eclock ereset"];
 
+  auto &ird = ditems["i_ird"];
+  auto &ma1 = ditems["o_ma1"];
+
   reset();
 
-  for(int i=0; i != 60; i++) {
-    printf("%3d: %d (%x %x) -> %x reset=%x\n", i, o_e->curr[0], lfsr.curr[0], nlfsr.curr[0], state.curr[0], ereset.curr[0]);
-    if(i & 1)
-      stepn();
-    else
-      stepp();
+  for(int i=0; i != 0x10000; i++) {
+    ird.next[0] = i;
+    //    printf("%3d: %d (%x %x) -> %x reset=%x\n", i, o_e->curr[0], lfsr.curr[0], nlfsr.curr[0], state.curr[0], ereset.curr[0]);
+    stepp();
+    stepn();
+    printf("%03x %04x\n", ma1.curr[0], i);
   }
   return 0;
 }
