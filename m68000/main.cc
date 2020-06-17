@@ -53,23 +53,29 @@ int main(int argc, char **argv)
   auto &nlfsr = ditems["eclock enlfsr"];
   auto &ereset = ditems["eclock ereset"];
 
-  auto &ird = ditems["i_ird"];
-  auto &ma1 = ditems["o_ma1"];
-  auto &ma2 = ditems["o_ma2"];
-  auto &ma3 = ditems["o_ma3"];
+  auto &ma = ditems["i_ma"];
+  auto &micro = ditems["o_micro"];
+  auto &nano = ditems["o_nano"];
+  auto &eu_w = ditems["i_eu_w"];
+  auto &eu_r = ditems["i_eu_r"];
 
   reset();
 
-  for(int i=0; i != 0x10000; i++) {
-    ird.next[0] = i;
+  for(int i=0; i != 0x400; i++) {
+    ma.next[0] = i;
     //    printf("%3d: %d (%x %x) -> %x reset=%x\n", i, o_e->curr[0], lfsr.curr[0], nlfsr.curr[0], state.curr[0], ereset.curr[0]);
+    eu_r.next[0] = 1;
     stepp();
+    eu_r.next[0] = 0;
+    eu_w.next[0] = 1;
     stepn();
-    printf("%04x %03x %03x %03x\n",
+    eu_w.next[0] = 0;
+    printf("%03x %05x %x%08x%08x\n",
 	   i,
-	   ma1.curr[0],
-	   ma2.curr[0],
-	   ma3.curr[0]);
+	   micro.curr[0],
+	   nano.curr[2],
+	   nano.curr[1],
+	   nano.curr[0]);
   }
   return 0;
 }

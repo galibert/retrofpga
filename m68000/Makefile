@@ -1,7 +1,7 @@
 YOSYS = /people/galibert
 
 BASE = gen.py
-COMPONENTS = m68000.py eclock.py idecode.py
+COMPONENTS = m68000.py eclock.py idecode.py microcode.py
 OPT=-O3
 
 m68000: main.cc m68000.cc
