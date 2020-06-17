@@ -55,6 +55,8 @@ int main(int argc, char **argv)
 
   auto &ird = ditems["i_ird"];
   auto &ma1 = ditems["o_ma1"];
+  auto &ma2 = ditems["o_ma2"];
+  auto &ma3 = ditems["o_ma3"];
 
   reset();
 
@@ -63,7 +65,11 @@ int main(int argc, char **argv)
     //    printf("%3d: %d (%x %x) -> %x reset=%x\n", i, o_e->curr[0], lfsr.curr[0], nlfsr.curr[0], state.curr[0], ereset.curr[0]);
     stepp();
     stepn();
-    printf("%03x %04x\n", ma1.curr[0], i);
+    printf("%04x %03x %03x %03x\n",
+	   i,
+	   ma1.curr[0],
+	   ma2.curr[0],
+	   ma3.curr[0]);
   }
   return 0;
 }

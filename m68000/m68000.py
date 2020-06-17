@@ -10,7 +10,9 @@ class m68000(Elaboratable):
 
         self.i_ird  = Signal(16)
         self.o_ma1  = Signal(10)
-
+        self.o_ma2  = Signal(10)
+        self.o_ma3  = Signal(10)
+        
         self.o_e    = Signal()
 
     def elaborate(self, platform):
@@ -23,6 +25,8 @@ class m68000(Elaboratable):
 
         m.d.pclk += idecode.i_ird.eq(self.i_ird)
         m.d.nclk += self.o_ma1.eq(idecode.o_ma1)
+        m.d.nclk += self.o_ma2.eq(idecode.o_ma2)
+        m.d.nclk += self.o_ma3.eq(idecode.o_ma3)
         
         m = EnableInserter({"pclk": self.i_pclk, "nclk": self.i_nclk})(m)
         m = DomainRenamer({"pclk": "sync", "nclk": "sync"})(m)
